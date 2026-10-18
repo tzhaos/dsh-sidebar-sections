@@ -4,6 +4,45 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-10-18
+
+Open-source readiness pass. No user-visible behaviour changes.
+
+### Changed
+
+- Refactored `client.js` into explicit layers (locale/helpers → browser-local state → styles →
+  shared surfaces → region → dialogs/apply) with a rewritten module header and architecture notes.
+- Shared menu entries (`sessionMenuEntries`, `projectMenuEntries`, `groupingMenuEntries`,
+  `sortMenuEntries`), one `renderSessionRow` helper, and generic `readStoredJson` /
+  `writeStoredJson` state helpers replace duplicated inline code; ProjectGroup no longer receives
+  six row callbacks.
+- Component code now consistently uses `SORT_*` / `GROUP_*` constants for their mode values.
+- All diagnostics go through one `warnState` channel with the `[dsh-sidebar-sections]` prefix;
+  expected failure paths are covered without noisy test output.
+- The stop-and-archive description now points at the Archived section instead of the removed
+  view-options filter.
+
+### Removed
+
+- Dead code: unused `IconTriangleRightFillRegular` import, unused locale keys
+  (`hover.project`, `project.newSession`, `project.more`, `project.more.aria`, `session.pin`,
+  `session.unpin`, `toast.sessionIdCopied`, `toast.createFailed`), the `MenuItemButton` import and
+  its stale static check, and the unused `runFromMenu` helper.
+- Stale doc comments that still described a three-section layout and a view-options filter.
+
+### Documentation
+
+- Rewrote `README.md` and `README.zh.md` in a professional OSS style: badges, TOC, layout diagram,
+  features, install/uninstall, usage, architecture, browser-local state table, compatibility,
+  development, testing, troubleshooting, limitations, contributing and license.
+- Added a repository-level `README.zh.md`, `CONTRIBUTING.md`, `.editorconfig`, GitHub Actions
+  check workflow, and `docs/layout.svg`.
+- `package.json`: `check` script, refreshed description/keywords, ships the layout diagram.
+
+### Verified
+
+- `node scripts/check.mjs`: 56 checks green.
+
 ## [1.8.0] - 2026-10-18
 
 Audit pass: interaction polish, keyboard access and failure handling.

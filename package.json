@@ -1,8 +1,8 @@
 {
   "name": "dsh-sidebar-sections",
-  "version": "1.8.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Sidebar sections for the DSH Web client: Pinned, Projects, and Recent conversations, with pin/unpin on every conversation row.",
+  "description": "Replaces the DSH sidebar conversation browser with Pinned / Projects / Recent / Archived sections, per-section and per-project sorting, drag ordering, context menus and hover previews.",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -17,6 +17,7 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
+    "docs/layout.svg",
     "README.md",
     "README.zh.md",
     "CHANGELOG.md",
@@ -47,6 +48,8 @@
     "dsh",
     "sidebar",
     "pinned",
+    "archived",
+    "projects",
     "ui"
   ]
 }

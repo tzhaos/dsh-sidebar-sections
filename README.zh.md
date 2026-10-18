@@ -2,88 +2,107 @@
 
 [English](README.md) | 简体中文
 
-一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 客户端插件：
-把左边栏的对话列表重排为 **置顶 / 项目 / 最近 / 归档** 四个大分区，并为每个对话提供
-**置顶 / 取消置顶、归档 / 取消归档、完整行菜单** 等管理入口。
+一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 客户端插件：把侧边栏
+变成 **置顶 / 项目 / 最近 / 归档** 四个分区的对话浏览器，带分区菜单、拖拽排序、右键菜单与悬停预览。
 
 ![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.2.1--rc.2-4D6BFE)
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
+![Checks](https://img.shields.io/badge/checks-56-brightgreen)
 
-- **无需构建、零运行时依赖**：浏览器半部是纯 JavaScript，只从 Harness 冻结的平台模块表
-  `require`（`react`、`@deepseek-ai/dsh-client-ui-primitives`、`@deepseek-ai/dsh-client-store`），
-  不会因为依赖解析失败而装不上。
-- **置顶由宿主持久化**：pin 集合属于宿主 Workspace Controller，不属于本插件。图钉按钮的语义是
-  **分区置顶**：点图钉后对话进入「置顶」区，同时离开所属项目与「最近」；取消置顶即回到原分组。
-- **原生观感与行为**：图标与控件全部复用宿主共享的 `ui-primitives` 模块表（icons、`StateDot`、
-  `Menu`、`MenuItemButton`、`Tooltip`、`Button`、`Modal`、`writeClipboard`、`relativeTime`），
-  插件不手绘任何图形；对话行、工作区行保持宿主原生 UI。
-- **保留宿主的管理入口**：每个对话的归档/取消归档与置顶/取消置顶、完整行菜单（置顶、重命名、
-  分叉、归档/取消归档、复制 Session ID）、归档分区、以及工作区的新建会话/
-  重命名/删除都保留。
-- **加载失败可回退**：插件通过 slot priority 遮蔽宿主浏览器；一旦本插件加载失败或渲染崩溃，
-  宿主浏览器会自动接管该位置，侧边栏不会留白。
+![侧边栏布局](docs/layout.svg)
 
-```
-🔍 筛选会话和工作区…
-置顶  ⌄
-  ● 发布前检查清单              dsh-plugins   3分钟   📌
-  ● 设计评审记录                lore-gpui     2小时   📌
-项目  3  ⌄                              ＋  ⋯
-  ▾ 📂 dsh-plugins
-      ○ 重排侧边栏                              1分钟
-  ▸ 📂 lore-gpui
-  ▸ 📂 未分组
-最近  4  ⌄                                ✎  ⋯
-  ● 重排侧边栏                  dsh-plugins   1分钟
-  ● 构建笔记                    lore-gpui     刚刚
-  … 显示更多
-归档  1  ⌄                                  ⋯
-  ○ 旧草稿                      dsh-plugins   5分钟
-```
+## 目录
 
-搜索控件独占首行。四个分区标题更大更粗，折叠箭头位于标题右侧；项目与最近区先放直接操作
-（`＋` / `✎`），再把 `⋯` 溢出菜单放在最右，因此所有省略号位置一致。置顶与归档区只有排序
-菜单；`✎` 在宿主默认工作区中新建会话。
+- [为什么](#为什么)
+- [功能](#功能)
+- [安装](#安装)
+- [使用](#使用)
+- [实现原理](#实现原理)
+- [兼容性](#兼容性)
+- [开发](#开发)
+- [测试](#测试)
+- [排障](#排障)
+- [已知限制](#已知限制)
+- [贡献](#贡献)
+- [许可证](#许可证)
 
-## 1. 功能
+## 为什么
 
-| 区域 | 行为 |
+宿主侧边栏把对话嵌在 Workspace 分组里，归档对话藏在一个可切换的视图中。长期使用的项目往往
+需要同一批对话同时出现在多个位置：置顶区、项目树、按时间排序的最近区，以及独立的归档区。
+
+本插件的原则是**只改布局、不丢宿主能力**：
+
+- **置顶 / 归档**成为正式分区，而不是可切换的过滤视图。
+- **项目**保留可编辑的 Workspace 分组，分组方式与排序可以按分区、按项目分别设置。
+- **最近**是不受历史长度限制的时间线。
+- 所有管理动作（置顶、归档、重命名、分叉、复制 Session ID、调整顺序）都仍然走宿主 API，
+  关键数据不会只存在插件内存里。
+
+## 功能
+
+### 四个分区
+
+| 分区 | 内容 |
 |---|---|
-| 置顶 | 来自宿主 pin 集合，最近置顶的在前。悬停或键盘聚焦出现**取消置顶**，静止时显示 📌 标记。行保持宿主原生的对话 UI（状态、标题、时间、操作）。标题右侧的箭头可折叠分区；`⋯` 菜单只提供排序方式（**手动排序** / **最近更新**）。 |
-| 项目 | 每个已登记 Workspace 一个分组，顺序与宿主一致，内部嵌套未置顶、未归档的对话。分组可折叠（浏览器本地记忆，默认展开）。悬停项目行出现**新建会话**与 **⋯** 菜单（**重命名工作区** / **删除工作区**）。项目行左侧始终是文件夹图标（展开/收起），点击行本身切换展开状态。分区标题右侧依次为 `＋`（添加工作区）与最右的 `⋯`：**分组方式**（按项目 / 单一列表）与**排序方式**（手动排序 / 最近更新）。每个项目行自己的 `⋯`（或右键）菜单还带**独立的排序方式**：**跟随分区排序**（默认）、手动排序或最近更新，可随时恢复为跟随分区。 |
-| 最近 | 所有项目下未置顶的对话，按最近活跃倒序。默认 8 条，每次**显示更多**增加 20 条；行内只显示标题与时间。分区标题右侧依次为 `✎`（在宿主默认工作区新建会话）与最右的 `⋯`：同样的**分组方式**（按项目 / 单一列表）与**排序方式**（手动排序 / 最近更新）。 |
-| 右键菜单 | 在对话行、项目行或任意分区标题上右键，会在鼠标位置打开与该处 `⋯` 按钮相同的菜单（行操作 / 项目排序 + 工作区操作 / 分区分组与排序）；也可用键盘 Context Menu 键或 `Shift+F10` 打开；菜单打开时触发行的整个 hover 效果（背景、时间切换、操作按钮）都会消失。 |
-| 项目悬停 | 在项目行停留片刻弹出预览卡片：文件夹图标 + 项目名、可见对话数量、项目目录路径。 |
-| 每个对话 | 悬停或键盘聚焦对话行出现**归档/取消归档**、**置顶/取消置顶**，以及 **⋯** 行菜单：置顶/取消置顶、重命名会话、分叉会话、归档/取消归档、复制 Session ID。在行上停留片刻会弹出预览卡片，显示对话标题、所属工作区与时间。 |
-| 搜索行 | 独占首行的全宽筛选控件（按对话标题或项目名；`Esc` 清除并收起）。 |
-| 分区标题 | 更大、更粗的分区标题；折叠箭头位于标题右侧，展开时向下、折叠时向右旋转。点击标题（或聚焦后按 `Enter` / `Space`）折叠/展开分区。折叠状态浏览器本地记忆；有筛选条件时分区自动展开以保证结果可见。`⋯` 始终是分区标题最右的按钮，保证各分区的省略号位置一致。 |
-| 归档 | 固定的第四个分区，汇总所有项目下的归档对话（默认按宿主手动顺序）。归档行灰显、恢复前不可打开，提供**取消归档**（不提供置顶/归档）；标题 `⋯` 只提供排序方式（**手动排序** / **最近更新**），没有归档会话时显示空提示。归档对话不再出现在置顶、项目或最近区。归档仍有运行中工作的会话会弹出宿主的「停止并归档」确认，并列出将被停止的工作。 |
-| 收起态 | 侧边栏收起时该区域变为三个 36px 图标按钮（筛选、添加工作区、新建会话）；点击筛选会展开侧边栏并聚焦输入框。 |
-| 状态 | 每个对话的实时状态格：运行中旋转环、等待审批 / 计划待审 / 待回答的警告点与紧凑标签、已完成点、选中行高亮。 |
-| 状态页 | 首屏骨架行、各分区空状态提示、空安装引导、操作失败的行内临时提示。 |
-| 可访问性 | 分区使用 `section` + `h2`，标题行为 `button` 语义并带 `aria-expanded`；项目行与对话行为 `treeitem`（`aria-expanded` / `aria-selected`）；图标按钮带 `aria-label` 与宿主 tooltip；状态点带隐藏文本；对话行可用键盘操作（`Enter` / `Space` 打开，`Tab` 可达行内按钮）；焦点环使用宿主 focus token。 |
+| **置顶** | 宿主 pin 集合，最近置顶的在前；行保持宿主原生对话 UI，静止时显示 📌。 |
+| **项目** | 每个已登记 Workspace 一个可折叠分组（折叠状态浏览器本地记忆），保留文件夹图标；每个项目可独立排序。 |
+| **最近** | 未置顶对话，按最近活跃倒序（默认 8 条，每次「显示更多」+20 条）；可选按项目分组。 |
+| **归档** | 所有归档对话，灰显、恢复前不可打开；固定第四个分区，空时显示提示。 |
 
-暂不实现的范围见 [§8](#8-已知限制)。
+标题为大号加粗行，带折叠箭头与右侧按钮；`⋯` 永远是分区标题最右侧的按钮，各分区对齐。
 
-## 2. 安装
+### 对话行
 
-这是一个本地 bundle 包，未发布到 registry。推荐的安装方式是通过 Harness 的
-Plugin Manager（由它写入 profile 清单、安装包、选中 bundle 并重组配置）：
+- 悬停或键盘聚焦出现**归档/取消归档**、**置顶/取消置顶**与 **⋯** 行菜单（置顶/取消置顶、重命名、
+  分叉、归档/取消归档、复制 Session ID）。
+- **右键**或按 `Shift+F10` / Context Menu 键，在鼠标位置或聚焦元素处打开同样的菜单。
+- 悬停约 400ms 显示预览卡片：标题、所属项目与时间。
+- 归档行只提供**取消归档**，且不可打开。
+
+### 排序
+
+| 选项 | 作用域 |
+|---|---|
+| **手动排序** | 在分区/项目内拖拽行，拖到目标上半/下半即插入其前/后，有插入线提示，靠近列表边缘自动滚动。 |
+| **最近更新** | 只读的时间顺序。 |
+| **按项目 / 单一列表** | 项目、最近的分组方式。 |
+
+- 顺序保存在浏览器本地，刷新后保持。
+- 真实 Workspace 分组还会通过 `workspaces.insertSessionBefore` 写回宿主；写回失败显示行内提示。
+- 项目菜单提供 **跟随分区排序 / 手动排序 / 最近更新**，可恢复默认。
+- 空白草稿行、跨分组拖动、以及筛选状态下不允许拖拽。
+
+### 右键与键盘
+
+- 右键对话行、项目行或任意分区标题均可打开对应菜单。
+- 键盘：`Shift+F10` / Context Menu 打开菜单；`Enter`/`Space` 激活行；`Tab` 到达行内操作；
+  `Esc` 关闭菜单或清空筛选。
+
+### 搜索与视图状态
+
+- 独占首行的全宽搜索框，按对话标题、项目名或目录名筛选；匹配的分组自动展开；`Esc` 清除并收起。
+- 视图状态全部存于 `localStorage` 的 `dsh.sidebarSections.*`：折叠状态、分组/排序、项目级排序
+  覆盖、拖拽顺序；宿主数据（pin/归档集合、会话标题）不会在本地复制。
+
+## 安装
+
+### Plugin Manager（推荐）
+
+在启用 Creator 预设的会话中执行：
 
 ```text
 plugin_manager(action="install_bundle", target="<本目录的绝对路径>")
 ```
 
-该工具在启用它的 Agent 预设（Creator 模式）里可用；Web 界面的 **插件** 页也提供同一操作。
-向运行中的 profile 安装 bundle 可以通过 HMR 直接生效（无需重启）；否则重启 DeepSeek Harness。
+Plugin Manager 会写入 profile 清单、安装/链接 bundle、选中并重组配置。安装进运行中的 profile 可
+通过 HMR 直接生效，无需重启。
 
-### 本地开发安装（手工）
+### 手工安装（开发用）
 
-`plugin_manager` 不可用时，可以手工接通 profile。这正是 Plugin Manager 执行的机制，只是省去了
-它的写锁与 pnpm 步骤，因此请仅作为开发路径使用：
-
-1. 让包能从 profile 目录解析到 —— Windows 目录 junction（或符号链接）即可：
+1. 让包能从 profile 目录解析到：
 
    ```powershell
    $profile = "$env:USERPROFILE\.dsh\profiles\desktop"
@@ -92,7 +111,7 @@ plugin_manager(action="install_bundle", target="<本目录的绝对路径>")
             -Target "<本目录的绝对路径>"
    ```
 
-2. 用一次原子写入，在 profile 的 `package.json` 中加入 `link:` 依赖，**同时**把包名追加到
+2. 一次原子写入 profile 的 `package.json`：加入 `link:` 依赖，**同时**把包名追加到
    `dsh.profile.bundles`：
 
    ```json
@@ -108,220 +127,172 @@ plugin_manager(action="install_bundle", target="<本目录的绝对路径>")
    }
    ```
 
-   只有有序 bundle 列表变化才会触发实时重组；只改 `dependencies` 会被 profile watcher 忽略。
+   只有有序 bundle 列表变化才会触发实时重组；只改 dependencies 会被 profile watcher 忽略。
 
-3. 运行中的应用约 2 秒后生效。之后修改 `client.js` 会由 client HMR 在约半秒内热更新（组件重挂载）；
-   修改 `index.js` 则在下次重组或重启时生效。
+3. 运行中的应用约 2 秒后生效；之后修改 `client.js` 会由 client HMR 在约半秒内热更新。
 
 ### 卸载
 
-从 `dsh.profile.bundles` 中移除 `dsh-sidebar-sections`（宿主浏览器立即恢复），
-再移除依赖项与 junction。使用 `plugin_manager` 时对应 `remove_bundle` 操作。
+从 `dsh.profile.bundles` 移除 `dsh-sidebar-sections`（宿主浏览器立即恢复），再移除依赖与
+junction；使用 Plugin Manager 时对应 `remove_bundle`。
 
-## 3. 使用
+### 环境要求
 
-- **置顶对话**：悬停（或用 `Tab` 聚焦）任意对话行，点击宿主的图钉按钮。其语义是
-  **分区置顶**：对话进入**置顶**区，同时离开所属项目分组与**最近**列表，重启后仍然保留；
-  行本身保持宿主原生的对话 UI。取消置顶后回到原分组与最近区。
-- **归档对话**：使用行内归档按钮或行菜单。归档后对话进入第四个**归档**分区（灰显、恢复前
-  不可打开），在归档区用**取消归档**恢复。若对话仍有运行中的工作，宿主会先要求确认
-  「停止并归档」，并列出将被停止的工作。
-- **管理对话**：**⋯** 行菜单提供置顶/取消置顶、重命名、分叉、归档/取消归档、复制 Session ID，
-  调用与宿主侧边栏相同的 Host 命令与失败提示。
-- **查找**：在首行搜索框输入标题或项目名的一部分；匹配的项目分组会自动展开；`Esc` 清除。
-- **折叠分区**：点击分区标题（或聚焦后按 `Enter` / `Space`）；选择会被记住。项目区 `⋯` 菜单
-  按钮只使用宿主的浮层 tooltip——侧边栏不再出现原生 HTML/系统 tooltip。
-- **排序与分组**：每个分区的 `⋯` 菜单提供各自的选项。置顶与归档区按**手动排序**（宿主
-  保存/ pin 顺序）或**最近更新**排序；项目与最近区还可切换**按项目** / **单一列表**。所有选择
-  记在浏览器本地。
-- **手动排序（拖拽）**：把分区切到**手动排序**（或把某个项目的项目菜单排序设为手动）后，行可
-  直接拖拽——拖到另一行的上半/下半即插入其前/后，并有插入线提示；拖到列表上下边缘时自动滚动。
-  排序结果保存在浏览器本地（`dsh.sidebarSections.manualOrder`）；真实 Workspace 分组还会通过
-  `workspaces.insertSessionBefore` 写回宿主，写回失败会显示行内提示。项目级排序偏好存于
-  `dsh.sidebarSections.projectSorts`。空白草稿行、跨分组拖动与筛选状态下的拖拽不可用。
-- **右键菜单**：在任意对话行、项目行或分区标题上右键，打开与对应 `⋯` 相同的操作菜单。
-- **分区快捷按钮**：项目区 `＋` 通过宿主目录选择器添加工作区；最近区 `✎` 在宿主默认工作区
-  新建会话（显示为 `workspace.defaultName` 的本地化名称）。
-- **悬停预览**：在对话行上停留片刻，会弹出包含标题、所属工作区与时间的浮动卡片；在项目行停留则显示项目名、可见对话数与目录路径。
-- **整理项目**：悬停项目行使用*新建会话*与 *⋯*；菜单可重命名或删除 Workspace 登记。
-  删除 Workspace 不会删除对话 —— 它们会进入**未分组**。
-- **添加项目**：使用项目区标题右侧的 `＋`；宿主打开目录选择器，登记该目录并在其中新建会话。
-- **折叠项目**：点击项目行。折叠状态记在浏览器 `localStorage` 中，仅是视图状态，不写入宿主。
+- DeepSeek Harness `0.2.1-rc.2`（Web 或 Desktop Web 界面）。
+- 无需构建、无需安装依赖、零运行时依赖。
 
-## 4. 实现原理
+## 使用
+
+1. **置顶对话**：悬停行按图钉。对话进入**置顶**区，同时离开项目分组与**最近**；取消置顶恢复。
+2. **归档对话**：使用行内归档按钮或菜单。对话进入**归档**区，在那里用**取消归档**恢复；仍有运行
+   中工作时会弹出宿主的「停止并归档」确认。
+3. **排序与分组**：打开分区 `⋯` 菜单。置顶/归档只有排序；项目/最近提供分组与排序；每个项目行
+   的 `⋯` 菜单额外提供项目级排序覆盖。
+4. **手动排序**：切到手动排序后拖拽行；项目级手动排序在分区仍是「最近更新」时也生效。
+5. **查找**：在搜索行输入；匹配分组自动展开；`Esc` 关闭。
+6. **不用鼠标打开菜单**：聚焦行/项目/分区标题后按 `Shift+F10`。
+7. **悬停预览**：在对话行或项目行停留约 400ms，卡片出现；移出后消失。
+
+## 实现原理
 
 `sidebar.workspaces` 是 `ui-sidebar` 声明的 root `single` slot。宿主
-`@deepseek-ai/dsh-client-ui-workspace` 以默认优先级 `0` 注册原生浏览器；本插件以优先级 `-1`
-注册替代实现。slot 渲染优先级最低的存活注册，因此与插件加载顺序无关。被遮蔽的注册仍留在
-ledger 上（并继续持有它的子 slot 声明），所以本插件**不声明任何 children**，菜单、行内按钮与
-对话框全部自绘。
+`@deepseek-ai/dsh-client-ui-workspace` 以默认优先级 `0` 注册；本插件以优先级 `-1` 注册。slot
+渲染优先级最低的存活注册，因此与加载顺序无关。被遮蔽的注册仍留在 ledger 上（并继续持有其子
+slot 声明），所以本插件**不声明任何 children**，自行渲染行、菜单与对话框。
 
 ```
 sidebar.workspaces (single, root)
-├── @deepseek-ai/dsh-client-ui-workspace   优先级  0   宿主原生浏览器
+├── @deepseek-ai/dsh-client-ui-workspace   优先级  0   宿主浏览器
 └── dsh-sidebar-sections                    优先级 -1   本插件（实际渲染）
 ```
 
-- **读**：`useSessions`（会话目录与持有关系）、`useWorkspaces`（工作区行、pin/归档集合）、
-  `useSessionStatus`（运行中 / 等待交互 / 未读完成）、`usePanelInfo`（全局面板激活时抑制选中态）。
-  组件自身不订阅任何 store。
-- **写**：`ctx.get('uiWorkspace')` 负责导航、置顶、归档、分叉与目录选择（`openSession`、
-  `startSession`、`pinSession`、`unpinSession`、`archiveSession`、`unarchiveSession`、
-  `forkSession`、`pickDirectory`）；`ctx.get('workspaces')` 负责工作区管理（`create`、`rename`、
-  `delete`）；会话重命名通过 `ctx.get('sessions').using()`。失败会以行内提示呈现，不会静默丢弃。
-- **复用**：图形与控件全部来自共享的 `ui-primitives`：`Menu` / `MenuItemButton` / `Tooltip`
-  构建行、项目与分区菜单，`StateDot` 渲染状态格，`Modal` + `Button` 渲染全部对话框，
-  `writeClipboard` 复制 Session ID，`relativeTime` 提供行时间桶。插件自己的样式表只负责布局
-  与插件特有外壳。
-- **对话框**：工作区重命名/删除、会话重命名与「停止并归档」注册到 root `shell.overlay` 列表，
-  因此渲染在整个 frame 之上，不会被侧边栏裁剪。侧边栏与 overlay 之间通过注册 `inject` 面上的
-  一个裸 observable 通信。
-- **派生**：一个纯函数把快照折叠成渲染节点：隐藏子智能体会话、非当前空白会话；归档会话
-  单独汇总为归档池，不进入其它分区；置顶行按 pin 数组顺序；项目成员按最近活跃排序且当前
-  空白会话置顶；未归属会话进入末尾分组；最近区按 `updatedAt` 排序并与置顶区去重。
-- **样式**：一个 `<style>` 元素持有全部类名（`dshss-` 前缀）；颜色与尺寸全部来自宿主 token 与
-  宿主测量值，图形来自 `ui-primitives`。
-- **模块格式**：浏览器半部是 classic script，调用
-  `window.__ModuleLoader__.load({ id: '<包名>', factory })` 并返回 Cordis 插件（`{ inject, apply }`）。
-  Host 半部是一个空的 `apply`，仅用于让包成为 Loader entry —— 客户端模块注册表正是通过它发现
-  浏览器 bundle 的。
+```
+ui-sidebar slot
+   └─ Browser (client.js)
+        ├─ deriveSections()  纯函数：快照 → pinned / projects / recent / archived
+        ├─ Browser state     搜索、折叠、视图、手动顺序、拖拽/悬停/右键状态
+        ├─ shell.overlay     工作区重命名/删除、会话重命名、停止并归档对话框
+        └─ uiWorkspace / workspaces / sessions   所有宿主写入
+```
 
-## 5. 兼容性
+- **读**：`useSessions`、`useWorkspaces`、`useSessionStatus`、`usePanelInfo`（由 slot 渲染器注入，
+  组件不直接订阅 store）。
+- **写**：`ctx.get('uiWorkspace')`（`openSession`、`startSession`、`pinSession`、`unpinSession`、
+  `archiveSession`、`unarchiveSession`、`forkSession`、`pickDirectory`）、
+  `ctx.get('workspaces')`（`create`、`rename`、`delete`、`insertSessionBefore`）、
+  `ctx.get('sessions').using()`（会话重命名）。失败以行内提示呈现。
+- **复用**：图标、`StateDot`、`Menu`、`Tooltip`、`Button`、`Modal`、`writeClipboard`、
+  `relativeTime` 全部来自共享的 `ui-primitives` 模块；插件不绘制图形。
+- **对话框**：注册到 root `shell.overlay`，渲染在整个 frame 之上，不会被侧边栏裁剪；侧边栏与
+  overlay 之间通过注册 `inject` 面上的一个裸 observable 通信。
+- **模块格式**：classic script 调用
+  `window.__ModuleLoader__.load({ id: '<包名>', factory })`；factory 返回 Cordis 插件
+  （`{ inject, apply }`）。Host 半部是空 `apply`，仅用于让包成为 Loader entry，使客户端模块
+  注册表发现浏览器 bundle。
+
+### 浏览器本地状态
+
+| Key | 内容 |
+|---|---|
+| `dsh.sidebarSections.collapsed` | 折叠的 Workspace 分组。 |
+| `dsh.sidebarSections.collapsedSections` | 折叠的置顶/项目/最近/归档分区。 |
+| `dsh.sidebarSections.sectionViews` | 各分区分组与排序选择。 |
+| `dsh.sidebarSections.projectSorts` | 项目级排序覆盖。 |
+| `dsh.sidebarSections.manualOrder` | 拖拽产生的手动顺序。 |
+
+## 兼容性
 
 | 组件 | 版本 |
 |---|---|
 | DeepSeek Harness | `0.2.1-rc.2`（源码 tag `dsh-v0.2.1-rc.2`） |
-| Client slot API | 预稳定（pre-stable）；已对照宿主 `ui-slots` / `ui-workspace` / `ui-sidebar` 契约验证 |
-| 运行时 | DSH Desktop / Web 自带 Node，无外部 Node 依赖 |
+| Client slot API | 预稳定；已对照宿主 `ui-slots` / `ui-workspace` / `ui-sidebar` 契约验证 |
+| 运行时 | DSH Desktop / Web 自带 Node，无外部依赖 |
 | 平台 | Web 与 Desktop 的 Web 界面（已在 Windows 验证；无平台相关代码） |
 
 Harness 客户端 API 明确标注为预稳定。DSH 升级后请重新运行 `node scripts/check.mjs` 并复查实机
 界面；slot 契约变化可能需要同步更新本插件。
 
-## 6. 验证
-
-`scripts/check.mjs` 是一个零依赖测试套件（56 项），直接使用 Node 运行：
-
-```sh
-node scripts/check.mjs
-```
-
-覆盖内容：
-
-- 包清单、exports、`files`、bundle patch、插件管理器显示元数据、图标尺寸与格式、仅使用平台模块，
-  以及“禁止手抄 SVG 路径数据（图形必须复用 ui-primitives）”规则；
-- `apply` 恰好注册一个获胜优先级的 `sidebar.workspaces` 替代实现，以及一个 `shell.overlay`
-  对话框，并注册完整的中英文字典；
-- 从 fixture 快照派生的区块：置顶顺序、项目嵌套、最近区排序（保持宿主行 UI、无行徽标）、
-  子智能体/非当前空白会话的隐藏、当前空白会话的位置、归档池的独立汇总；
-- 归档分区：归档行只出现在归档区（不出现在置顶/项目/最近），灰显、以「取消归档」代替置顶，
-  无归档时显示空提示；
-- 每个分区的 `⋯` 菜单：置顶与归档只有排序方式；项目 / 最近提供分组方式与排序方式（没有
-  收起/展开全部项目项），且选择会浏览器本地持久化；对话行带有供悬停预览使用的工作区信息；
-  行与按钮不输出原生 `title` tooltip；
-- 手动排序：手动模式下行为可拖拽，放下后重排并持久化手动顺序；最近更新模式下不可拖拽；
-  项目行保持文件夹图标，不会在悬停时变成箭头；
-- 项目级排序：单个项目的排序偏好只重排该分组并持久化，真实 Workspace 分组同时派发宿主
-  `insertSessionBefore`；
-- 右键菜单：对话行、项目行、分区标题都能打开对应菜单并派发相同操作（归档行右键只有取消归档、
-  没有置顶）；右键菜单打开时根节点带 `dshss-menuActive`（抵消 hover 背景）；
-- 悬停预览：对话卡片渲染标题/项目/时间并在移出后清除；项目卡片从行的 data 属性渲染名称/
-  可见对话数/路径；
-- 拖拽手动排序还覆盖「上半部插入到前面」的落点，禁止拖拽空白草稿行与筛选状态下的拖拽，
-  并在宿主写回失败时显示本地化提示；
-- 项目级排序可恢复为「跟随分区排序」；
-- 键盘 Context Menu 键 / Shift+F10 可打开行、项目、分区的右键菜单；
-- 静态检查：菜单打开样式不再绘制 hover 背景；
-- 新侧边栏外壳：搜索控件独占一行、独立的「工作区」标题已移除、折叠箭头在标题右侧、
-  四个分区折叠/展开并持久化、项目/最近区的 `⋯` 位于最右、项目区 `＋` 添加工作区、
-  最近区 `✎` 在宿主默认工作区新建会话、`⋯` 菜单提供分区专属项；
-- 交互派遣：置顶/取消置顶、归档（含「停止并归档」拒绝路径）、取消归档、完整会话行菜单
-  （重命名请求、分叉、归档、复制 Session ID）、打开、新建会话、添加工作区（选择器 → 登记 →
-  开会话）、项目重命名/删除请求、本地筛选与 `Esc`、折叠持久化、收起态；
-- 对话框提交：工作区重命名、会话重命名（经 `sessions.using`）、删除文案与保留边界、
-  「停止并归档」及其活动列表。
-
-测试套件用迷你 React/hooks 运行时驱动真实组件函数（含状态、effects 与合成事件），
-宿主 `ui-primitives` 由 host-shaped fake 替代（菜单、Modal、Button、剪贴板、相对时间、图标占位）。
-
-已在运行中的 DSH Desktop `0.2.1-rc.2` profile 做实机验证：新 UI 热更新后，搜索独占首行、
-四个分区标题（含归档）加大加粗，折叠箭头在标题右侧，`⋯` 统一位于最右；点击分区标题可
-折叠/展开（`Enter` 亦可）；归档区 `⋯` 只有排序方式，项目/最近区 `⋯` 提供分组与排序、
-无收起/展开全部项目项；最近区 `✎` / `⋯` 可用；此前已实机验证置顶/取消置顶的分区联动与
-归档恢复，测试状态均已复原。
-
-## 7. 开发
+## 开发
 
 ```
 dsh-sidebar-sections/
 ├── package.json              # bundle patch + dsh.client 清单、exports、files
 ├── cordis.patch.yml          # 插入 `sidebar-sections` Loader 行
-├── index.js                  # Host 半部：空 apply（用于发现浏览器 bundle）
+├── index.js                  # Host 半部：空 apply（用于发现 bundle）
 ├── client.js                 # 浏览器半部：纯 JS，无构建步骤
-├── icon.svg                  # 插件管理器图标（原创）
+├── icon.svg                  # 插件管理器图标
 ├── locale/                   # 插件管理器标题/描述（en、zh）
+├── docs/layout.svg           # README 布局示意
 ├── scripts/check.mjs         # 零依赖验证套件
-├── README.md / README.zh.md  # 英文文档与本文
+├── README.md / README.zh.md
 ├── CHANGELOG.md
 └── LICENSE
 ```
 
 开发内环：
 
-1. 把包链接进一个开发用 profile（见 [§2](#2-安装)）。
+1. 把包链接进开发用 profile（见 [安装](#安装)）。
 2. 每次修改后运行 `node scripts/check.mjs`。
-3. 修改 `client.js`，运行中的页面约半秒内重挂载浏览器（client HMR 轮询产物；若窗口被遮挡，
-   前台化后 HMR 会应用积压的更新）。
-4. 只有改 Host 行时才需要改 `index.js` / `package.json`；它们在下次重组或重启时生效。
+3. 修改 `client.js`，运行中的页面约半秒内热更新浏览器挂载。
+4. 只有 `index.js` / `package.json` 变更才需要重组或重启。
 
-贡献约定：
+贡献约定见 [CONTRIBUTING.md](../CONTRIBUTING.md)，要点：浏览器半部保持零依赖且只允许平台
+模块表；不声明子 slot；复用 `ui-primitives`；只使用主题 token；中英字典保持同步；用户可见变更
+写入 `CHANGELOG.md`。
 
-- 浏览器半部保持零依赖：只允许 `require` 平台模块表中的模块；图标/控件复用 `ui-primitives`。
-- 不要声明任何 `sidebar.workspaces.*` 子 slot —— 被遮蔽的宿主注册仍持有它们；改为自绘 UI。
-- 使用主题 token，不要写死颜色；行与控件沿用宿主测量值。
-- 所有用户可见文案走插件自己的 locale 命名空间（中英双语齐全）。
-- 保持 `README.md` 与 `README.zh.md` 同步，并在 `CHANGELOG.md` 记录用户可见变更。
+## 测试
 
-## 8. 已知限制
+`scripts/check.mjs` 是零依赖 Node 套件（56 项），覆盖：
 
-- **归档分区固定存在**：第四个分区始终显示（无归档时显示空提示），不再提供可切换的
-  归档视图，也不支持把归档行混排进项目/最近区。
+- 包清单、exports、`files`、bundle patch、插件管理器显示元数据、图标、仅平台模块，以及
+  「禁止手抄 SVG 路径」的复用规则；
+- `apply` 注册（一个 `sidebar.workspaces` 替代 + 一个 `shell.overlay` 对话框）与中英文字典一致；
+- 纯派生：置顶顺序、项目嵌套、最近排序、归档独占、隐藏子智能体/空白行、折叠与筛选状态；
+- 四个分区菜单、项目菜单（含项目级排序重置）、鼠标/键盘右键菜单、悬停预览、拖拽前/后落点、
+  空白行与筛选状态的拖拽保护；
+- 宿主动作派发（置顶、归档含 stop-and-archive 拒绝、取消归档、分叉、复制 ID、工作区
+  添加/重命名/删除、会话重命名、顺序写回）与失败提示；
+- 静态卫生：无 DOM `title` 原生 tooltip、无字面量颜色、菜单打开不绘制 hover 背景。
 
-- **分组/排序为分区级**：宿主的全局 *分组方式*（工作区树 / 单列表）与 *排序方式* 被替换为
-  各分区 `⋯` 菜单中的 *按项目 / 单一列表* 与 *手动排序 / 最近更新*；祖先目录下的工作区树
-  嵌套未复刻。
-- **手动排序范围**：拖拽只在单个列表/分组内生效（不支持跨项目移动）；真实 Workspace 分组之外
-  的顺序保存在浏览器存储中，而不是宿主数据。
-- **仅本地筛选**：只匹配已加载的对话标题与项目名，不使用宿主消息内容检索；
-  宿主原生的 `Ctrl+K` 搜索命令不再驱动本浏览器。
-- **添加工作区依赖原生目录选择器**：本地 Desktop/Web 组合提供原生选择器；
-  若部署只组合了浏览式 picker，会显示不可用提示而不是选择流程。
-- **未复刻**：子智能体运行数、hover 卡片、计划任务标记、工作区树在祖先目录下的嵌套、
-  带消息摘要的搜索结果列表。
+套件通过迷你 React/hooks 运行时与 host-shaped 的 `ui-primitives` fake 驱动真实组件函数，无需
+安装依赖。
 
-## 9. 排障
+不自动化（设计边界）：真实浏览器中的 HTML5 拖拽/右键/悬停计时、像素级布局，以及宿主
+预稳定 UI 的契约之外行为。
+
+## 排障
 
 | 现象 | 可能原因 / 处理 |
 |---|---|
-| 安装后侧边栏没变化 | bundle 未被选中，或 profile 未重组。确认 `dsh.profile.bundles` 含 `dsh-sidebar-sections`，然后重启 DSH。 |
-| 又变回宿主 Workspace 浏览器 | 插件未激活（被卸载、加载失败或渲染崩溃）。slot 回退会恢复宿主浏览器，这是设计行为。检查设置 → 插件与浏览器控制台。 |
-| 没有置顶/项目/最近标题，侧边栏空白 | 插件在等待服务（`inject: slots, locale, uiWorkspace, workspaces, sessions`）；确认宿主的 sidebar/workspace/layout bundle 已启用。 |
-| 窗口在后台时改了代码没生效 | 页面被遮挡会节流 HMR 轮询；把 DSH 窗口切到前台后会自动应用。 |
-| 添加工作区提示不可用 | 当前组合的目录选择器后端不提供原生系统选择框。 |
-| 点置顶没有反应 | 对未知/已归档会话的 pin 会被拒绝；行内提示会带宿主的错误码与信息。 |
+| 安装后侧边栏没变化 | bundle 未被选中或 profile 未重组；确认 `dsh.profile.bundles` 含 `dsh-sidebar-sections`，然后重启 DSH。 |
+| 又变回宿主 Workspace 浏览器 | 插件未激活（被移除、加载失败或渲染崩溃）；slot 回退是设计行为，检查设置 → 插件与浏览器控制台。 |
+| 没有分区标题，侧边栏空白 | 插件在等待服务（`inject: slots, locale, uiWorkspace, workspaces, sessions`）；确认宿主 sidebar/workspace/layout bundle 已启用。 |
+| 代码修改没生效 | 窗口在后台会节流 client HMR；把 DSH 窗口切到前台。 |
+| 添加工作区提示不可用 | 当前组合的目录选择器后端没有原生选择框。 |
+| 点置顶没反应 | 宿主拒绝未知/已归档会话的 pin；行内提示会带宿主错误码与信息。 |
 | 最近区为空 | 所有可见对话要么已置顶，要么已归档。 |
+| 提示「调整排序失败」 | 宿主拒绝了顺序写回（例如 Workspace 并发变更）；界面保留最后确认的顺序。 |
 
-## 10. 路线图
+## 已知限制
 
-- 本地筛选支持模糊标题匹配。
-- 筛选可选用宿主内容检索。
-- 在保留分区结构的前提下提供分组/排序视图模式（例如工作区树嵌套）。
-- 行 hover 卡片与计划任务/子智能体标记。
-- 通过插件的 `Config` schema 提供配置行（最近条数、分区显隐）。
+- **分组/排序为分区级**：宿主全局的分组/排序模式被替换为各分区选项；不支持祖先目录下的
+  工作区树嵌套。
+- **归档分区固定存在**：第四个分区始终渲染（空时显示提示），归档行不会混排进项目/最近。
+- **手动排序范围**：拖拽只在单个列表/分组内生效（不支持跨项目移动）；真实 Workspace 分组之外的
+  顺序保存在浏览器存储中。
+- **仅本地筛选**：只匹配已加载的标题/项目名，不使用宿主消息内容检索与 `Ctrl+K` 入口。
+- **未复刻**：子智能体运行数、消息 hover 卡片、计划任务标记、工作区树嵌套、带消息摘要的
+  搜索结果列表。
+- **预稳定 API**：DSH 升级可能改变 slot/service 契约。
 
-## 11. 许可证
+## 贡献
+
+欢迎 issue 与 pull request。动手前请阅读 [CONTRIBUTING.md](../CONTRIBUTING.md)，并在提交前
+运行 `node scripts/check.mjs`；保持中英 README 与 `CHANGELOG.md` 同步。
+
+## 许可证
 
 [MIT](LICENSE)
 
-图标与控件在运行时解析自 DeepSeek Harness 仓库的 `ui-primitives` 包（同为 MIT），
-本插件不复制其源码。主题 token 与行测量值遵循宿主 `ui-sidebar` / `ui-workspace` / `ui-theme` 包。
+图标与控件在运行时解析自 DeepSeek Harness 仓库的 `ui-primitives` 包（同为 MIT），本插件不复制
+其源码。主题 token 与测量值遵循宿主 `ui-sidebar` / `ui-workspace` / `ui-theme` 包。

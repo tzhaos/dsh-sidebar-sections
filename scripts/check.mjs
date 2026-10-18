@@ -139,8 +139,9 @@ await check('glyphs and controls are reused from ui-primitives', () => {
   assert(clientSource.includes("require('@deepseek-ai/dsh-client-ui-primitives')"), 'primitives required')
   assert(!/const svgProps\s*=/.test(clientSource), 'hand-written SVG helper must not exist')
   assert(!/d:\s*['"]M[0-9]/.test(clientSource), 'no inline hand-copied SVG path data')
-  for (const primitive of ['Menu', 'MenuItemButton', 'Tooltip', 'StateDot', 'Button', 'Modal', 'writeClipboard', 'relativeTime']) {
-    assert(new RegExp(`\\b${primitive},`).test(clientSource), `expected primitives.${primitive} usage`)
+  const primitiveImports = /const \{([\s\S]*?)\} = primitives/.exec(clientSource)?.[1] ?? ''
+  for (const primitive of ['Menu', 'Tooltip', 'StateDot', 'Button', 'Modal', 'writeClipboard', 'relativeTime']) {
+    assert(new RegExp('\\b' + primitive + '\\b').test(primitiveImports), 'expected primitives.' + primitive + ' import')
   }
   for (const icon of ['IconPinOutlineRegular', 'IconArchiveOutlineRegular', 'IconEllipsisOutlineRegular', 'IconNewChatOutlineRegular', 'IconChevronDownOutlineRegular']) {
     assert(clientSource.includes(icon), `expected ${icon} reuse`)
@@ -1175,23 +1176,32 @@ await check('per-project manual sort reorders its own conversation list', async 
     'Host order write dispatched')
   // A rejected Host reorder must surface the localized notice, not vanish.
   services.workspaces.insertSessionBefore = () => Promise.reject(new Error('host rejected'))
-  const rerenderedGroup = () => findOne(harness.tree, (element) => element.type === 'div'
-    && element.props?.className === 'dshss-group'
-    && element.props['aria-label'] === 'Alpha project')
-  let rowsNow = findAll(rerenderedGroup(), isSessionRow)
-  dispatch(harness, rowsNow[0], 'onDragStart', syntheticEvent({ dataTransfer: { setData() {}, effectAllowed: '' } }))
-  rowsNow = findAll(rerenderedGroup(), isSessionRow)
-  dispatch(harness, rowsNow[1], 'onDragOver', syntheticEvent({
-    clientY: 30,
-    currentTarget: { getBoundingClientRect: () => ({ top: 0, height: 32 }) },
-    dataTransfer: { dropEffect: '' },
-  }))
-  rowsNow = findAll(rerenderedGroup(), isSessionRow)
-  dispatch(harness, rowsNow[1], 'onDrop', syntheticEvent({}))
-  await settle()
+  const warnings = []
+  const originalWarn = console.warn
+  console.warn = (...args) => { warnings.push(args.map(String).join(' ')) }
+  try {
+    const rerenderedGroup = () => findOne(harness.tree, (element) => element.type === 'div'
+      && element.props?.className === 'dshss-group'
+      && element.props['aria-label'] === 'Alpha project')
+    let rowsNow = findAll(rerenderedGroup(), isSessionRow)
+    dispatch(harness, rowsNow[0], 'onDragStart', syntheticEvent({ dataTransfer: { setData() {}, effectAllowed: '' } }))
+    rowsNow = findAll(rerenderedGroup(), isSessionRow)
+    dispatch(harness, rowsNow[1], 'onDragOver', syntheticEvent({
+      clientY: 30,
+      currentTarget: { getBoundingClientRect: () => ({ top: 0, height: 32 }) },
+      dataTransfer: { dropEffect: '' },
+    }))
+    rowsNow = findAll(rerenderedGroup(), isSessionRow)
+    dispatch(harness, rowsNow[1], 'onDrop', syntheticEvent({}))
+    await settle()
+  } finally {
+    console.warn = originalWarn
+  }
   harness.rerender()
   assert(textOf(harness.tree).includes(t('toast.reorderFailed', { message: 'host rejected' })),
     'reorder failure notice shown')
+  assert(warnings.some((line) => line.includes('[dsh-sidebar-sections]') && line.includes('reorder session')),
+    'failure logged through the plugin channel')
 })
 
 await check('local filter narrows rows and Escape clears it', () => {

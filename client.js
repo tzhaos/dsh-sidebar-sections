@@ -1,24 +1,29 @@
 /**
  * Sidebar Sections — browser half of the `dsh-sidebar-sections` bundle.
  *
- * The plugin replaces the shipped Workspace browser with a three-section
- * conversation browser:
+ * Replaces the shipped Workspace browser with a four-section conversation
+ * browser:
  *
- *   Pinned   — Sessions in the registry-global pin set, newest pin first.
- *   Projects — Workspaces (Host-durable order) with their conversations nested
- *              as expandable groups.
- *   Recent   — The most recently active unpinned conversations.
+ *   Pinned   — the registry-global pin set, newest pin first.
+ *   Projects — registered Workspaces with their conversations nested as
+ *              expandable groups (grouping/sort configurable per section and
+ *              per project).
+ *   Recent   — the most recently active unpinned conversations.
+ *   Archived — archived conversations, always collected here.
  *
- * It deliberately keeps the shipped browser's management surface: every
- * conversation row offers archive/unarchive, pin/unpin, and the full row menu
- * (pin, rename, fork, archive/unarchive, copy Session ID); the toolbar keeps a
- * view-options menu whose archived filter restores archived conversations; and
- * project rows keep new-session plus rename/delete workspace.
+ * The shipped management surface is kept: archive/unarchive, pin/unpin, the
+ * full row menu (pin, rename, fork, archive/unarchive, copy Session ID),
+ * drag-reordering in manual order, right-click / keyboard context menus,
+ * hover previews, per-section and per-project sort, and a local filter.
  *
- * All icons and controls come from the Host's shared `ui-primitives` module
- * table row (icons, StateDot, Menu, MenuItemButton, Tooltip, Button, Modal,
- * writeClipboard, relativeTime), so the plugin renders the shipped artwork and
- * behavior instead of re-drawing them.
+ * Architecture inside the Cordis factory:
+ *   1. locale dictionaries and pure derivation helpers (no React, no ctx);
+ *   2. browser-local state helpers (best-effort localStorage, one warn channel);
+ *   3. the plugin stylesheet (theme tokens only);
+ *   4. shared surfaces (conversation row, project group, section header/menu,
+ *      hover preview);
+ *   5. the Browser region component (state, handlers, four sections);
+ *   6. `shell.overlay` dialogs and the Cordis `apply` registration.
  *
  * Composition notes (verified against DSH 0.2.1-rc.2 source):
  *   - `sidebar.workspaces` is a root-scoped `single` slot declared by
@@ -31,10 +36,12 @@
  *     component never subscribes to stores itself.
  *   - Observable side state (dialog requests) travels to the `shell.overlay`
  *     registration through an injected bare source, never a module singleton.
+ *   - All icons and controls come from the Host's `ui-primitives` module-table
+ *     row (icons, StateDot, Menu, Tooltip, Button, Modal, writeClipboard,
+ *     relativeTime), so the plugin renders the shipped artwork and behavior.
  *
  * @module dsh-sidebar-sections/client
  */
-
 window.__ModuleLoader__.load({
   id: 'dsh-sidebar-sections',
   factory(require) {
@@ -47,7 +54,6 @@ window.__ModuleLoader__.load({
       Button,
       Modal,
       Menu,
-      MenuItemButton,
       Tooltip,
       writeClipboard,
       relativeTime,
@@ -67,7 +73,6 @@ window.__ModuleLoader__.load({
       IconQueueOutlineRegular,
       IconSearchOutlineRegular,
       IconTrashOutlineRegular,
-      IconTriangleRightFillRegular,
       IconUnarchiveOutlineRegular,
     } = primitives
     const { useEffect, useMemo, useRef, useState } = React
@@ -86,6 +91,13 @@ window.__ModuleLoader__.load({
     const RECENT_INITIAL = 8
     /** Extra Recent rows revealed per "show more" activation. */
     const RECENT_STEP = 20
+    /** Sort and grouping modes shared by the section/project menus. */
+    const SORT_MANUAL = 'manual'
+    const SORT_UPDATED = 'updated'
+    const GROUP_PROJECT = 'project'
+    const GROUP_LIST = 'list'
+    /** Fixed section keys in render order. */
+    const SECTION_KEYS = ['pinned', 'projects', 'recent', 'archived']
     /** Browser-local view state keys (never Host data). */
     const COLLAPSED_KEY = 'dsh.sidebarSections.collapsed'
     const SECTION_COLLAPSED_KEY = 'dsh.sidebarSections.collapsedSections'
@@ -122,22 +134,16 @@ window.__ModuleLoader__.load({
       'group.label': '分组方式',
       'group.byProject': '按项目',
       'group.oneList': '单一列表',
-      'hover.project': '工作区',
       'hover.projectCount': '{n} 个对话',
       'newSession': '新建会话',
       'section.archived.empty': '还没有已归档会话',
-      'project.newSession': '新会话',
       'project.newSession.aria': '在“{name}”中新建会话',
-      'project.more': '工作区操作',
-      'project.more.aria': '工作区“{name}”的操作',
       'project.ungrouped': '未分组',
       'project.empty': '暂无会话',
       'rename': '重命名',
       'delete.workspace': '删除工作区',
       'session.new': '新会话',
       'session.untitled': '未命名',
-      'session.pin': '置顶会话',
-      'session.unpin': '取消置顶',
       'session.pinned': '已置顶',
       'session.open': '打开会话 {title}',
       'menu.pinSession': '置顶会话',
@@ -153,7 +159,6 @@ window.__ModuleLoader__.load({
       'actions.unarchive': '取消归档',
       'actions.pin': '置顶会话',
       'actions.unpin': '取消置顶',
-      'toast.sessionIdCopied': 'Session ID 已复制',
       'toast.reorderFailed': '调整排序失败：{message}',
       'toast.reorderFailed': 'Could not reorder: {message}',
       'toast.sessionIdCopyFailed': '复制失败，请重试',
@@ -164,12 +169,11 @@ window.__ModuleLoader__.load({
       'toast.unarchiveFailed': '取消归档失败：{message}',
       'toast.forkFailed': '分叉会话失败：{message}',
       'toast.forkRequiresOpen': '请先打开原会话完成迁移，再创建分支',
-      'toast.createFailed': '新建会话失败：{message}',
       'toast.workspaceAddFailed': '添加工作区失败：{message}',
       'rename.session.title': '重命名会话',
       'field.sessionName': '会话名称',
       'archive.confirm.title': '停止并归档此会话？',
-      'archive.confirm.desc': '“{title}”仍有正在进行的工作。归档会先停止这些工作；之后可在“视图选项 → 显示全部会话”中恢复会话，被停止的工作不会自动继续。',
+      'archive.confirm.desc': '“{title}”仍有正在进行的工作。归档会先停止这些工作；之后可在“归档”分区中恢复该会话，被停止的工作不会自动继续。',
       'archive.confirm.action': '停止并归档',
       'archive.confirm.turn': '进行中的回合',
       'archive.confirm.subagents': '{n} 个运行中的子智能体：{names}',
@@ -237,22 +241,16 @@ window.__ModuleLoader__.load({
       'group.label': 'Group chats by',
       'group.byProject': 'By project',
       'group.oneList': 'In one list',
-      'hover.project': 'Workspace',
       'hover.projectCount': '{n} chats',
       'newSession': 'New session',
       'section.archived.empty': 'No archived conversations yet',
-      'project.newSession': 'New session',
       'project.newSession.aria': 'New session in {name}',
-      'project.more': 'Workspace actions',
-      'project.more.aria': 'Workspace actions for {name}',
       'project.ungrouped': 'Ungrouped',
       'project.empty': 'No conversations',
       'rename': 'Rename',
       'delete.workspace': 'Delete workspace',
       'session.new': 'New Session',
       'session.untitled': 'Untitled',
-      'session.pin': 'Pin conversation',
-      'session.unpin': 'Unpin conversation',
       'session.pinned': 'Pinned',
       'session.open': 'Open conversation {title}',
       'menu.pinSession': 'Pin session',
@@ -268,7 +266,6 @@ window.__ModuleLoader__.load({
       'actions.unarchive': 'Unarchive session',
       'actions.pin': 'Pin session',
       'actions.unpin': 'Unpin session',
-      'toast.sessionIdCopied': 'Session ID copied',
       'toast.reorderFailed': '调整排序失败：{message}',
       'toast.reorderFailed': 'Could not reorder: {message}',
       'toast.sessionIdCopyFailed': 'Copy failed, please retry',
@@ -279,12 +276,11 @@ window.__ModuleLoader__.load({
       'toast.unarchiveFailed': 'Unarchive failed: {message}',
       'toast.forkFailed': 'Fork failed: {message}',
       'toast.forkRequiresOpen': 'Open the source session to finish migration, then fork again',
-      'toast.createFailed': 'New session failed: {message}',
       'toast.workspaceAddFailed': 'Adding the workspace failed: {message}',
       'rename.session.title': 'Rename session',
       'field.sessionName': 'Session name',
       'archive.confirm.title': 'Stop and archive this session?',
-      'archive.confirm.desc': '"{title}" still has work in progress. Archiving stops that work first; the session can be restored from View options → All conversations, and the stopped work does not resume automatically.',
+      'archive.confirm.desc': '"{title}" still has work in progress. Archiving stops that work first; restore the session from the Archived section afterwards. Stopped work does not resume automatically.',
       'archive.confirm.action': 'Stop and archive',
       'archive.confirm.turn': 'Turn in progress',
       'archive.confirm.subagents': '{n} subagent(s) running: {names}',
@@ -609,188 +605,173 @@ window.__ModuleLoader__.load({
      * Read the browser-local collapse record.
      * @returns {Record<string, boolean>} collapsed Workspace keys.
      */
-    function readCollapsed() {
+    /** Single diagnostic channel for browser-local state problems. */
+    function warnState(context, error) {
+      console.warn('[dsh-sidebar-sections] ' + context, error)
+    }
+
+    /**
+     * Read one JSON browser-local record.
+     * @param {string} key - storage key.
+     * @param {object} fallback - value returned when reading fails.
+     * @returns {object} parsed record or the fallback.
+     */
+    function readStoredJson(key, fallback) {
       try {
-        const raw = window.localStorage.getItem(COLLAPSED_KEY)
-        if (raw === null) return {}
+        const raw = window.localStorage.getItem(key)
+        if (raw === null) return fallback
         const parsed = JSON.parse(raw)
-        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-        const collapsed = {}
-        for (const key of Object.keys(parsed)) {
-          if (parsed[key] === true) collapsed[key] = true
-        }
-        return collapsed
+        return parsed !== null && typeof parsed === 'object' ? parsed : fallback
       } catch (error) {
-        console.warn('sidebar-sections: unreadable collapse record', error)
-        return {}
+        warnState('could not read ' + key, error)
+        return fallback
       }
     }
 
     /**
-     * Persist the browser-local collapse record (best effort).
-     * @param {Record<string, boolean>} collapsed - collapsed Workspace keys.
+     * Persist one JSON browser-local record (best effort).
+     * @param {string} key - storage key.
+     * @param {object} value - JSON-serializable value.
+     */
+    function writeStoredJson(key, value) {
+      try {
+        window.localStorage.setItem(key, JSON.stringify(value))
+      } catch (error) {
+        warnState('could not persist ' + key, error)
+      }
+    }
+
+    /**
+     * Read the collapsed Workspace-group keys.
+     * @returns {Record<string, boolean>} collapsed group keys.
+     */
+    function readCollapsed() {
+      const parsed = readStoredJson(COLLAPSED_KEY, {})
+      const collapsed = {}
+      for (const [key, value] of Object.entries(parsed)) {
+        if (value === true) collapsed[key] = true
+      }
+      return collapsed
+    }
+
+    /**
+     * Persist the collapsed Workspace-group keys.
+     * @param {Record<string, boolean>} collapsed - collapsed group keys.
      */
     function writeCollapsed(collapsed) {
-      try {
-        window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify(collapsed))
-      } catch (error) {
-        console.warn('sidebar-sections: collapse record not persisted', error)
+      writeStoredJson(COLLAPSED_KEY, collapsed)
+    }
+
+    /**
+     * Normalize one section's grouping/sort preference.
+     * @param {object} value - stored preference candidate.
+     * @param {{group: string, sort: string}} fallback - defaults.
+     * @returns {{group: string, sort: string}} validated preference.
+     */
+    function readSectionView(value, fallback) {
+      if (value === null || typeof value !== 'object') return fallback
+      return {
+        group: value.group === GROUP_LIST || value.group === GROUP_PROJECT ? value.group : fallback.group,
+        sort: value.sort === SORT_MANUAL || value.sort === SORT_UPDATED ? value.sort : fallback.sort,
       }
     }
 
-
     /**
-     * Read the browser-local section view preferences (grouping + sort order).
+     * Read the browser-local section view preferences.
      * @returns {{pinnedSort: string, archivedSort: string, projects: object, recent: object}} views.
      */
     function readSectionViews() {
       const defaults = {
-        pinnedSort: 'manual',
-        archivedSort: 'manual',
-        projects: { group: 'project', sort: 'updated' },
-        recent: { group: 'list', sort: 'updated' },
+        pinnedSort: SORT_MANUAL,
+        archivedSort: SORT_MANUAL,
+        projects: { group: GROUP_PROJECT, sort: SORT_UPDATED },
+        recent: { group: GROUP_LIST, sort: SORT_UPDATED },
       }
-      try {
-        const raw = window.localStorage.getItem(SECTION_VIEW_KEY)
-        if (raw === null) return defaults
-        const parsed = JSON.parse(raw)
-        if (parsed === null || typeof parsed !== 'object') return defaults
-        const readView = (value, fallback) => {
-          if (value === null || typeof value !== 'object') return fallback
-          return {
-            group: value.group === 'list' || value.group === 'project' ? value.group : fallback.group,
-            sort: value.sort === 'manual' || value.sort === 'updated' ? value.sort : fallback.sort,
-          }
-        }
-        return {
-          pinnedSort: parsed.pinnedSort === 'updated' ? 'updated' : 'manual',
-          archivedSort: parsed.archivedSort === 'updated' ? 'updated' : 'manual',
-          projects: readView(parsed.projects, defaults.projects),
-          recent: readView(parsed.recent, defaults.recent),
-        }
-      } catch (error) {
-        console.warn('sidebar-sections: unreadable section view record', error)
-        return defaults
+      const parsed = readStoredJson(SECTION_VIEW_KEY, {})
+      return {
+        pinnedSort: parsed.pinnedSort === SORT_UPDATED ? SORT_UPDATED : SORT_MANUAL,
+        archivedSort: parsed.archivedSort === SORT_UPDATED ? SORT_UPDATED : SORT_MANUAL,
+        projects: readSectionView(parsed.projects, defaults.projects),
+        recent: readSectionView(parsed.recent, defaults.recent),
       }
     }
 
     /**
-     * Persist the browser-local section view preferences (best effort).
+     * Persist the browser-local section view preferences.
      * @param {object} views - current preferences.
      */
     function writeSectionViews(views) {
-      try {
-        window.localStorage.setItem(SECTION_VIEW_KEY, JSON.stringify(views))
-      } catch (error) {
-        console.warn('sidebar-sections: section views not persisted', error)
-      }
+      writeStoredJson(SECTION_VIEW_KEY, views)
     }
 
     /**
      * Read the browser-local per-project sort overrides.
-     * @returns {Record<string, 'manual'|'updated'>} workspace key -> sort mode.
+     * @returns {Record<string, string>} workspace key -> sort mode.
      */
     function readProjectSorts() {
-      try {
-        const raw = window.localStorage.getItem(PROJECT_SORTS_KEY)
-        if (raw === null) return {}
-        const parsed = JSON.parse(raw)
-        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-        const sorts = {}
-        for (const [key, value] of Object.entries(parsed)) {
-          if (value === 'manual' || value === 'updated') sorts[key] = value
-        }
-        return sorts
-      } catch (error) {
-        console.warn('sidebar-sections: unreadable project sort record', error)
-        return {}
+      const parsed = readStoredJson(PROJECT_SORTS_KEY, {})
+      const sorts = {}
+      for (const [key, value] of Object.entries(parsed)) {
+        if (value === SORT_MANUAL || value === SORT_UPDATED) sorts[key] = value
       }
+      return sorts
     }
 
     /**
-     * Persist the browser-local per-project sort overrides (best effort).
+     * Persist the browser-local per-project sort overrides.
      * @param {Record<string, string>} sorts - workspace key -> sort mode.
      */
     function writeProjectSorts(sorts) {
-      try {
-        window.localStorage.setItem(PROJECT_SORTS_KEY, JSON.stringify(sorts))
-      } catch (error) {
-        console.warn('sidebar-sections: project sorts not persisted', error)
-      }
+      writeStoredJson(PROJECT_SORTS_KEY, sorts)
     }
 
     /**
-     * Read the browser-local manual order overrides (drag reordering).
+     * Read the browser-local drag-created manual orders.
      * @returns {{pinned: string[], recent: string[], archived: string[], flat: string[], projects: Record<string, string[]>}} order.
      */
     function readManualOrder() {
-      const empty = { pinned: [], recent: [], archived: [], flat: [], projects: {} }
-      try {
-        const raw = window.localStorage.getItem(MANUAL_ORDER_KEY)
-        if (raw === null) return empty
-        const parsed = JSON.parse(raw)
-        if (parsed === null || typeof parsed !== 'object') return empty
-        const ids = (value) => (Array.isArray(value) ? value.filter((id) => typeof id === 'string') : [])
-        const projects = {}
-        if (parsed.projects !== null && typeof parsed.projects === 'object') {
-          for (const [key, value] of Object.entries(parsed.projects)) projects[key] = ids(value)
-        }
-        return {
-          pinned: ids(parsed.pinned),
-          recent: ids(parsed.recent),
-          archived: ids(parsed.archived),
-          flat: ids(parsed.flat),
-          projects,
-        }
-      } catch (error) {
-        console.warn('sidebar-sections: unreadable manual order', error)
-        return empty
+      const parsed = readStoredJson(MANUAL_ORDER_KEY, {})
+      const ids = (value) => (Array.isArray(value) ? value.filter((id) => typeof id === 'string') : [])
+      const projects = {}
+      if (parsed.projects !== null && typeof parsed.projects === 'object') {
+        for (const [key, value] of Object.entries(parsed.projects)) projects[key] = ids(value)
+      }
+      return {
+        pinned: ids(parsed.pinned),
+        recent: ids(parsed.recent),
+        archived: ids(parsed.archived),
+        flat: ids(parsed.flat),
+        projects,
       }
     }
 
     /**
-     * Persist the browser-local manual order overrides (best effort).
+     * Persist the browser-local drag-created manual orders.
      * @param {object} order - current overrides.
      */
     function writeManualOrder(order) {
-      try {
-        window.localStorage.setItem(MANUAL_ORDER_KEY, JSON.stringify(order))
-      } catch (error) {
-        console.warn('sidebar-sections: manual order not persisted', error)
-      }
+      writeStoredJson(MANUAL_ORDER_KEY, order)
     }
 
     /**
-     * Read the browser-local section-collapse record.
+     * Read the collapsed section keys.
      * @returns {Record<string, boolean>} collapsed section keys.
      */
     function readSectionCollapsed() {
-      try {
-        const raw = window.localStorage.getItem(SECTION_COLLAPSED_KEY)
-        if (raw === null) return {}
-        const parsed = JSON.parse(raw)
-        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-        const collapsed = {}
-        for (const key of ['pinned', 'projects', 'recent', 'archived']) {
-          if (parsed[key] === true) collapsed[key] = true
-        }
-        return collapsed
-      } catch (error) {
-        console.warn('sidebar-sections: unreadable section collapse record', error)
-        return {}
+      const parsed = readStoredJson(SECTION_COLLAPSED_KEY, {})
+      const collapsed = {}
+      for (const key of SECTION_KEYS) {
+        if (parsed[key] === true) collapsed[key] = true
       }
+      return collapsed
     }
 
     /**
-     * Persist the browser-local section-collapse record (best effort).
+     * Persist the collapsed section keys.
      * @param {Record<string, boolean>} collapsed - collapsed section keys.
      */
     function writeSectionCollapsed(collapsed) {
-      try {
-        window.localStorage.setItem(SECTION_COLLAPSED_KEY, JSON.stringify(collapsed))
-      } catch (error) {
-        console.warn('sidebar-sections: section collapse not persisted', error)
-      }
+      writeStoredJson(SECTION_COLLAPSED_KEY, collapsed)
     }
 
     /**
@@ -843,7 +824,7 @@ window.__ModuleLoader__.load({
      */
     function invoke(action, report, label, describe) {
       const fail = (error) => {
-        console.warn(`sidebar-sections: ${label} failed`, error)
+        warnState(label + ' failed', error)
         report(describe === undefined ? messageOf(error) : describe(error))
       }
       try {
@@ -1419,6 +1400,62 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Conversation-row menu entries; archived rows omit Pin.
+     * @param {object} node - rendered row node.
+     * @param {Function} t - translate seat.
+     * @returns {object[]} menu entries.
+     */
+    function sessionMenuEntries(node, t) {
+      const items = []
+      if (!node.archived) {
+        items.push({
+          id: 'pin',
+          label: node.pinned ? t('menu.unpinSession') : t('menu.pinSession'),
+          icon: node.pinned ? h(IconPinFillRegular, { size: 14 }) : h(IconPinOutlineRegular, { size: 14 }),
+        })
+      }
+      items.push(
+        { id: 'rename', label: t('menu.renameSession'), icon: h(IconEditOutlineRegular, { size: 14 }) },
+        { id: 'fork', label: t('menu.forkSession'), icon: h(IconBranchOutlineRegular, { size: 14 }) },
+        {
+          id: 'archive',
+          label: node.archived ? t('menu.unarchiveSession') : t('menu.archiveSession'),
+          icon: node.archived ? h(IconUnarchiveOutlineRegular, { size: 14 }) : h(IconArchiveOutlineRegular, { size: 14 }),
+        },
+        { id: 'copy-id', label: t('menu.sessionId'), icon: h(IconCopyOutlineRegular, { size: 14 }), separatorBefore: true },
+      )
+      return items
+    }
+
+    /**
+     * Project-row menu entries: per-project sort override plus Workspace actions.
+     * @param {Function} t - translate seat.
+     * @returns {object[]} menu entries.
+     */
+    function projectMenuEntries(t) {
+      return [
+        { type: 'label', id: 'project-sort', text: t('sort.label') },
+        { id: 'sort-default', label: t('sort.default') },
+        { id: 'sort-manual', label: t('sort.manual') },
+        { id: 'sort-updated', label: t('sort.updated') },
+        { type: 'separator', id: 'project-separator' },
+        { id: 'rename', label: t('rename'), icon: h(IconEditOutlineRegular, { size: 14 }) },
+        { id: 'delete', label: t('delete.workspace'), icon: h(IconTrashOutlineRegular, { size: 14 }), danger: true },
+      ]
+    }
+
+    /**
+     * Selected menu ids for the project sort override block.
+     * @param {string|undefined} sortOverride - stored override.
+     * @param {string} sortMode - effective sort mode.
+     * @returns {string[]} selected ids.
+     */
+    function projectSortSelection(sortOverride, sortMode) {
+      if (sortOverride === undefined) return ['sort-default']
+      return [sortMode === SORT_MANUAL ? 'sort-manual' : 'sort-updated']
+    }
+
+    /**
      * One conversation row: status, title, time, resting pin mark, and the
      * trailing management strip (ellipsis menu, archive/unarchive, pin/unpin).
      * @param {object} props - row node, selection state, and actions.
@@ -1426,17 +1463,12 @@ window.__ModuleLoader__.load({
      */
     function SessionRow({
       node, selected, panelActive, onOpen, onTogglePin, onArchive, onMenuAction, t,
-      canDrag, dropHint, onDragStart, onDragOver, onDrop, onDragEnd, onMenuOpenChange,
-      onContextMenuKey,
+      canDrag, dropHint, onDragStart, onDragOver, onDrop, onDragEnd, onContextMenuKey,
     }) {
       const [menuOpen, setMenuOpen] = useState(false)
       const showStatus = node.status.state !== 'idle'
       const isSelected = selected && panelActive !== true
       const closeMenu = () => { setMenuOpen(false) }
-      const runFromMenu = (action) => {
-        closeMenu()
-        action()
-      }
       const menuLabel = t('actions.session.aria', { name: node.title })
       const pinLabel = node.pinned ? t('actions.unpin') : t('actions.pin')
       const archiveLabel = node.archived ? t('actions.unarchive') : t('actions.archive')
@@ -1499,30 +1531,14 @@ window.__ModuleLoader__.load({
           'aria-label': menuLabel,
           onClick: () => { setMenuOpen((open) => !open) },
         }, h(IconEllipsisOutlineRegular, { size: 16 })),
-      },
-      !node.archived && h(MenuItemButton, {
-        icon: node.pinned ? h(IconPinFillRegular, { size: 14 }) : h(IconPinOutlineRegular, { size: 14 }),
-        onSelect: () => { runFromMenu(onTogglePin) },
-      }, node.pinned ? t('menu.unpinSession') : t('menu.pinSession')),
-      h(MenuItemButton, {
-        icon: h(IconEditOutlineRegular, { size: 14 }),
-        onSelect: () => { runFromMenu(() => { onMenuAction('rename') }) },
-      }, t('menu.renameSession')),
-      h(MenuItemButton, {
-        icon: h(IconBranchOutlineRegular, { size: 14 }),
-        onSelect: () => { runFromMenu(() => { onMenuAction('fork') }) },
-      }, t('menu.forkSession')),
-      h(MenuItemButton, {
-        icon: node.archived
-          ? h(IconUnarchiveOutlineRegular, { size: 14 })
-          : h(IconArchiveOutlineRegular, { size: 14 }),
-        onSelect: () => { runFromMenu(onArchive) },
-      }, node.archived ? t('menu.unarchiveSession') : t('menu.archiveSession')),
-      h(MenuItemButton, {
-        icon: h(IconCopyOutlineRegular, { size: 14 }),
-        separatorBefore: true,
-        onSelect: () => { runFromMenu(() => { onMenuAction('copy-id') }) },
-      }, t('menu.sessionId'))),
+        items: sessionMenuEntries(node, t),
+        onSelect: (id) => {
+          closeMenu()
+          if (id === 'pin') { onTogglePin(); return }
+          if (id === 'archive') { onArchive(); return }
+          onMenuAction(id)
+        },
+      }),
       h(IconButton, { label: archiveLabel, small: true, onClick: onArchive },
           node.archived
             ? h(IconUnarchiveOutlineRegular, { size: 14 })
@@ -1540,9 +1556,8 @@ window.__ModuleLoader__.load({
      * @returns {object} the group element.
      */
     function ProjectGroup({
-      group, expanded, onToggle, onNewSession, onWorkspaceMenu, onSessionMenu,
-      onOpen, onTogglePin, onArchive, panelActive, rowDrag, sortMode, sortOverride, onSort, t,
-      onMenuOpenChange, onContextMenuKey, rowContextKey,
+      group, expanded, onToggle, onNewSession, onWorkspaceMenu, rowDrag,
+      sortMode, sortOverride, onSort, onContextMenuKey, renderSessionRow, t,
     }) {
       const [menuOpen, setMenuOpen] = useState(false)
       const groupLabel = t('actions.workspace.aria', { name: group.label })
@@ -1590,23 +1605,8 @@ window.__ModuleLoader__.load({
             'aria-label': groupLabel,
             onClick: () => { setMenuOpen((open) => !open) },
           }, h(IconEllipsisOutlineRegular, { size: 16 })),
-          items: [
-            { type: 'label', id: 'project-sort', text: t('sort.label') },
-            { id: 'sort-default', label: t('sort.default') },
-            { id: 'sort-manual', label: t('sort.manual') },
-            { id: 'sort-updated', label: t('sort.updated') },
-            { type: 'separator', id: 'project-separator' },
-            { id: 'rename', label: t('rename'), icon: h(IconEditOutlineRegular, { size: 14 }) },
-            {
-              id: 'delete',
-              label: t('delete.workspace'),
-              icon: h(IconTrashOutlineRegular, { size: 14 }),
-              danger: true,
-            },
-          ],
-          selectedIds: [sortOverride === undefined
-            ? 'sort-default'
-            : sortMode === 'manual' ? 'sort-manual' : 'sort-updated'],
+          items: projectMenuEntries(t),
+          selectedIds: projectSortSelection(sortOverride, sortMode),
           onSelect: (id) => {
             setMenuOpen(false)
             if (id === 'sort-default') { onSort('default'); return }
@@ -1621,20 +1621,10 @@ window.__ModuleLoader__.load({
           ? h('div', { className: 'dshss-groupSessions', role: 'group', 'aria-label': group.label },
             group.nodes.length === 0
               ? h('div', { className: 'dshss-emptyHint' }, t('project.empty'))
-              : group.nodes.map((node) => h(SessionRow, {
-                key: node.id,
+              : group.nodes.map((node) => renderSessionRow(
                 node,
-                selected: node.id === group.currentId,
-                panelActive,
-                onOpen: () => { onOpen(node) },
-                onTogglePin: () => { onTogglePin(node) },
-                onArchive: () => { onArchive(node) },
-                onMenuAction: (action) => { onSessionMenu(node, action) },
-                onMenuOpenChange,
-                onContextMenuKey: (event) => rowContextKey(event, node.id),
-                ...rowDrag(node, group.nodes.map((entry) => entry.id)),
-                t,
-              })))
+                rowDrag(node, group.nodes.map((entry) => entry.id)),
+              )))
           : null)
     }
 
@@ -1654,29 +1644,47 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Grouping menu entries shared by section menus and section context menus.
+     * @param {Function} t - translate seat.
+     * @returns {object[]} menu entries.
+     */
+    function groupingMenuEntries(t) {
+      return [
+        { type: 'label', id: 'group-by', text: t('group.label') },
+        { id: 'group-project', label: t('group.byProject'), icon: h(IconFolderCloseRegular, { size: 14 }) },
+        { id: 'group-list', label: t('group.oneList'), icon: h(IconQueueOutlineRegular, { size: 14 }) },
+      ]
+    }
+
+    /**
+     * Sort menu entries shared by section menus and section context menus.
+     * @param {Function} t - translate seat.
+     * @returns {object[]} menu entries.
+     */
+    function sortMenuEntries(t) {
+      return [
+        { type: 'label', id: 'sort-by', text: t('sort.label') },
+        { id: 'sort-manual', label: t('sort.manual') },
+        { id: 'sort-updated', label: t('sort.updated') },
+      ]
+    }
+
+    /**
      * Per-section overflow menu: grouping mode and sort order.
      * @param {object} props - current modes, their dispatchers, and t.
      * @returns {object} the menu element.
      */
-    function SectionMenu({ label, grouping, onGrouping, sort, onSort, t, onMenuOpenChange }) {
+    function SectionMenu({ label, grouping, onGrouping, sort, onSort, t }) {
       const [open, setOpen] = useState(false)
       const items = []
       const selectedIds = []
       if (grouping !== undefined) {
-        items.push(
-          { type: 'label', id: 'group-by', text: t('group.label') },
-          { id: 'group-project', label: t('group.byProject'), icon: h(IconFolderCloseRegular, { size: 14 }) },
-          { id: 'group-list', label: t('group.oneList'), icon: h(IconQueueOutlineRegular, { size: 14 }) },
-        )
-        selectedIds.push(grouping === 'project' ? 'group-project' : 'group-list')
+        items.push(...groupingMenuEntries(t))
+        selectedIds.push(grouping === GROUP_PROJECT ? 'group-project' : 'group-list')
       }
       if (sort !== undefined) {
-        items.push(
-          { type: 'label', id: 'sort-by', text: t('sort.label') },
-          { id: 'sort-manual', label: t('sort.manual') },
-          { id: 'sort-updated', label: t('sort.updated') },
-        )
-        selectedIds.push(sort === 'manual' ? 'sort-manual' : 'sort-updated')
+        items.push(...sortMenuEntries(t))
+        selectedIds.push(sort === SORT_MANUAL ? 'sort-manual' : 'sort-updated')
       }
       return h(Menu, {
         open,
@@ -2251,23 +2259,48 @@ window.__ModuleLoader__.load({
           h(IconSearchOutlineRegular, { size: 14 }),
           h('span', { className: 'dshss-searchBarLabel' }, t('filter.placeholder'))))
 
+      /** Open the same context menu from the keyboard (ContextMenu / Shift+F10). */
+      const openContextMenuForKey = (event, kind, data) => {
+        if (event.key !== 'ContextMenu' && !(event.shiftKey === true && event.key === 'F10')) return false
+        event.preventDefault()
+        cancelHoverTimer()
+        setHoverPreview(null)
+        const rect = event.currentTarget?.getBoundingClientRect?.()
+        setContextMenu({
+          kind,
+          ...data,
+          point: rect === undefined || rect === null
+            ? { x: 0, y: 0 }
+            : { x: Math.max(8, rect.right - 8), y: rect.bottom - 4 },
+        })
+        return true
+      }
+
+      /**
+       * Render one conversation row with the shared handlers and drag props.
+       * @param {object} node - rendered row node.
+       * @param {object} dragProps - drag handlers for this container.
+       * @returns {object} row element.
+       */
+      const renderSessionRow = (node, dragProps) => h(SessionRow, {
+        key: node.id,
+        node,
+        selected: node.id === sections.currentId,
+        panelActive,
+        onOpen: () => { openNode(node) },
+        onTogglePin: () => { togglePin(node) },
+        onArchive: () => { archiveNode(node) },
+        onMenuAction: (action) => { runSessionMenu(node, action) },
+        onContextMenuKey: (event) => openContextMenuForKey(event, 'row', { sessionId: node.id }),
+        ...dragProps,
+        t,
+      })
+
       const pinnedRows = () => {
         if (pinnedCount === 0) return h('div', { className: 'dshss-emptyHint' }, t('section.pinned.empty'))
-        const drag = rowDrag('pinned', sectionViews.pinnedSort === 'manual')
+        const drag = rowDrag('pinned', sectionViews.pinnedSort === SORT_MANUAL)
         const order = pinnedNodes.map((node) => node.id)
-        return pinnedNodes.map((node) => h(SessionRow, {
-          key: node.id,
-          node,
-          selected: node.id === sections.currentId,
-          panelActive,
-          onOpen: () => { openNode(node) },
-          onTogglePin: () => { togglePin(node) },
-          onArchive: () => { archiveNode(node) },
-          onMenuAction: (action) => { runSessionMenu(node, action) },
-          onContextMenuKey: (event) => openContextMenuForKey(event, 'row', { sessionId: node.id }),
-          ...drag(node, order),
-          t,
-        }))
+        return pinnedNodes.map((node) => renderSessionRow(node, drag(node, order)))
       }
 
       const projectRows = () => {
@@ -2280,22 +2313,10 @@ window.__ModuleLoader__.load({
               onClick: addWorkspace,
             }, t('toolbar.add')))
         }
-        if (sectionViews.projects.group === 'list') {
-          const drag = rowDrag('flat', sectionViews.projects.sort === 'manual')
+        if (sectionViews.projects.group === GROUP_LIST) {
+          const drag = rowDrag('flat', sectionViews.projects.sort === SORT_MANUAL)
           const order = flatProjectNodes.map((node) => node.id)
-          return flatProjectNodes.map((node) => h(SessionRow, {
-            key: node.id,
-            node,
-            selected: node.id === sections.currentId,
-            panelActive,
-            onOpen: () => { openNode(node) },
-            onTogglePin: () => { togglePin(node) },
-            onArchive: () => { archiveNode(node) },
-            onMenuAction: (action) => { runSessionMenu(node, action) },
-          onContextMenuKey: (event) => openContextMenuForKey(event, 'row', { sessionId: node.id }),
-            ...drag(node, order),
-            t,
-          }))
+          return flatProjectNodes.map((node) => renderSessionRow(node, drag(node, order)))
         }
         return projectGroups.map((group) => h(ProjectGroup, {
           key: group.key === '' ? '__ungrouped__' : group.key,
@@ -2310,13 +2331,8 @@ window.__ModuleLoader__.load({
             if (id === 'rename') actions.renameWorkspace(group.workspaceId, group.label)
             else actions.deleteWorkspace(group.workspaceId, group.label)
           },
-          onSessionMenu: runSessionMenu,
           onContextMenuKey: (event) => openContextMenuForKey(event, 'project', { workspaceKey: projectOrderKey(group.key) }),
-          rowContextKey: (event, sessionId) => openContextMenuForKey(event, 'row', { sessionId }),
-          onOpen: openNode,
-          onTogglePin: togglePin,
-          onArchive: archiveNode,
-          panelActive,
+          renderSessionRow,
           rowDrag: rowDrag('project:' + projectOrderKey(group.key), group.sort === 'manual', group.workspaceId),
           t,
         }))
@@ -2331,19 +2347,7 @@ window.__ModuleLoader__.load({
           sectionViews.recent.sort === 'manual' && sectionViews.recent.group === 'list',
         )
         const order = recentNodes.map((node) => node.id)
-        const rows = (nodes) => nodes.map((node) => h(SessionRow, {
-          key: node.id,
-          node,
-          selected: node.id === sections.currentId,
-          panelActive,
-          onOpen: () => { openNode(node) },
-          onTogglePin: () => { togglePin(node) },
-          onArchive: () => { archiveNode(node) },
-          onMenuAction: (action) => { runSessionMenu(node, action) },
-          onContextMenuKey: (event) => openContextMenuForKey(event, 'row', { sessionId: node.id }),
-          ...drag(node, order),
-          t,
-        }))
+        const rows = (nodes) => nodes.map((node) => renderSessionRow(node, drag(node, order)))
         const groups = sectionViews.recent.group === 'project'
           ? recentGroups.flatMap((group) => [
             h('div', { key: 'recent-group-' + group.key, className: 'dshss-subgroup' },
@@ -2376,21 +2380,9 @@ window.__ModuleLoader__.load({
         if (archivedCount === 0) {
           return h('div', { className: 'dshss-emptyHint' }, t('section.archived.empty'))
         }
-        const drag = rowDrag('archived', sectionViews.archivedSort === 'manual')
+        const drag = rowDrag('archived', sectionViews.archivedSort === SORT_MANUAL)
         const order = archivedNodes.map((node) => node.id)
-        return archivedNodes.map((node) => h(SessionRow, {
-          key: node.id,
-          node,
-          selected: node.id === sections.currentId,
-          panelActive,
-          onOpen: () => { openNode(node) },
-          onTogglePin: () => { togglePin(node) },
-          onArchive: () => { archiveNode(node) },
-          onMenuAction: (action) => { runSessionMenu(node, action) },
-          onContextMenuKey: (event) => openContextMenuForKey(event, 'row', { sessionId: node.id }),
-          ...drag(node, order),
-          t,
-        }))
+        return archivedNodes.map((node) => renderSessionRow(node, drag(node, order)))
       }
 
       const sectionBody = loading
@@ -2515,23 +2507,6 @@ window.__ModuleLoader__.load({
         }
       }
 
-      /** Open the same context menu from the keyboard (ContextMenu / Shift+F10). */
-      const openContextMenuForKey = (event, kind, data) => {
-        if (event.key !== 'ContextMenu' && !(event.shiftKey === true && event.key === 'F10')) return false
-        event.preventDefault()
-        cancelHoverTimer()
-        setHoverPreview(null)
-        const rect = event.currentTarget?.getBoundingClientRect?.()
-        setContextMenu({
-          kind,
-          ...data,
-          point: rect === undefined || rect === null
-            ? { x: 0, y: 0 }
-            : { x: Math.max(8, rect.right - 8), y: rect.bottom - 4 },
-        })
-        return true
-      }
-
       const contextMenuElement = (() => {
         if (contextMenu === null) return null
         const items = []
@@ -2540,14 +2515,7 @@ window.__ModuleLoader__.load({
         if (contextMenu.kind === 'row') {
           const node = findSessionNode(contextMenu.sessionId)
           if (node === undefined) return null
-          items.push(
-            { id: 'pin', label: node.pinned ? t('menu.unpinSession') : t('menu.pinSession'), icon: node.pinned ? h(IconPinFillRegular, { size: 14 }) : h(IconPinOutlineRegular, { size: 14 }) },
-            { id: 'rename', label: t('menu.renameSession'), icon: h(IconEditOutlineRegular, { size: 14 }) },
-            { id: 'fork', label: t('menu.forkSession'), icon: h(IconBranchOutlineRegular, { size: 14 }) },
-            { id: 'archive', label: node.archived ? t('menu.unarchiveSession') : t('menu.archiveSession'), icon: node.archived ? h(IconUnarchiveOutlineRegular, { size: 14 }) : h(IconArchiveOutlineRegular, { size: 14 }) },
-            { id: 'copy-id', label: t('menu.sessionId'), icon: h(IconCopyOutlineRegular, { size: 14 }), separatorBefore: true },
-          )
-          if (node.archived) items.shift()
+          items.push(...sessionMenuEntries(node, t))
           onSelect = (id) => {
             if (id === 'pin') { togglePin(node); return }
             if (id === 'archive') { archiveNode(node); return }
@@ -2556,18 +2524,8 @@ window.__ModuleLoader__.load({
         } else if (contextMenu.kind === 'project') {
           const group = projectGroups.find((candidate) => projectOrderKey(candidate.key) === contextMenu.workspaceKey)
           if (group === undefined) return null
-          items.push(
-            { type: 'label', id: 'project-sort', text: t('sort.label') },
-            { id: 'sort-default', label: t('sort.default') },
-            { id: 'sort-manual', label: t('sort.manual') },
-            { id: 'sort-updated', label: t('sort.updated') },
-            { type: 'separator', id: 'project-separator' },
-            { id: 'rename', label: t('rename'), icon: h(IconEditOutlineRegular, { size: 14 }) },
-            { id: 'delete', label: t('delete.workspace'), icon: h(IconTrashOutlineRegular, { size: 14 }), danger: true },
-          )
-          selectedIds.push(group.sortOverride === undefined
-            ? 'sort-default'
-            : group.sort === 'manual' ? 'sort-manual' : 'sort-updated')
+          items.push(...projectMenuEntries(t))
+          selectedIds.push(...projectSortSelection(group.sortOverride, group.sort))
           onSelect = (id) => {
             if (id === 'sort-default') { setProjectSort(group.key, 'default'); return }
             if (id === 'sort-manual' || id === 'sort-updated') {
@@ -2586,19 +2544,11 @@ window.__ModuleLoader__.load({
               : section === 'projects' ? sectionViews.projects.sort : sectionViews.archivedSort
           if (section === 'projects' || section === 'recent') {
             const grouping = section === 'projects' ? sectionViews.projects.group : sectionViews.recent.group
-            items.push(
-              { type: 'label', id: 'group-by', text: t('group.label') },
-              { id: 'group-project', label: t('group.byProject'), icon: h(IconFolderCloseRegular, { size: 14 }) },
-              { id: 'group-list', label: t('group.oneList'), icon: h(IconQueueOutlineRegular, { size: 14 }) },
-            )
-            selectedIds.push(grouping === 'project' ? 'group-project' : 'group-list')
+            items.push(...groupingMenuEntries(t))
+            selectedIds.push(grouping === GROUP_PROJECT ? 'group-project' : 'group-list')
           }
-          items.push(
-            { type: 'label', id: 'sort-by', text: t('sort.label') },
-            { id: 'sort-manual', label: t('sort.manual') },
-            { id: 'sort-updated', label: t('sort.updated') },
-          )
-          selectedIds.push(sortValue === 'manual' ? 'sort-manual' : 'sort-updated')
+          items.push(...sortMenuEntries(t))
+          selectedIds.push(sortValue === SORT_MANUAL ? 'sort-manual' : 'sort-updated')
           onSelect = (id) => {
             if (id === 'group-project' || id === 'group-list') {
               const group = id === 'group-project' ? 'project' : 'list'
