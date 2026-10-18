@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-10-18
+
+Hover polish and project previews.
+
+### Added
+
+- **Project hover preview**: hovering a project row for ~400 ms opens a card with the folder icon
+  and project name, the visible conversation count, and the canonical directory path. Project rows
+  carry `data-project-label` / `data-project-path` / `data-project-count` for it.
+
+### Fixed
+
+- A row no longer keeps its hover surface after its menu is triggered: the trigger-row background
+  rule no longer follows `dshss-menuOpen`, and while a right-click context menu is open the root
+  carries `dshss-menuActive`, which cancels row/project hover backgrounds until the menu closes.
+
+### Verified
+
+- `node scripts/check.mjs`: 51 checks green (project hover metadata, context-menu hover
+  suppression state, plus the existing context-menu and sorting coverage).
+
 ## [1.6.0] - 2026-10-18
 
 Right-click menus and per-project sorting.

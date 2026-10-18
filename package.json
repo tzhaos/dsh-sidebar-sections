@@ -1,6 +1,6 @@
 {
   "name": "dsh-sidebar-sections",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "description": "Sidebar sections for the DSH Web client: Pinned, Projects, and Recent conversations, with pin/unpin on every conversation row.",
   "type": "module",

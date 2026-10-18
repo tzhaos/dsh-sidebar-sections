@@ -1005,6 +1005,29 @@ await check('right-clicking a section heading opens its section menu', () => {
   assertEqual(views.recent.sort, 'manual', 'section context menu persists sort')
 })
 
+await check('project rows carry their own hover preview metadata', () => {
+  const { harness } = scenario()
+  const project = findOne(harness.tree, (element) => isProjectRow(element) && element.props['aria-label'] === 'Alpha project')
+  assertEqual(project.props['data-project-label'], 'Alpha project', 'hover label')
+  assertEqual(project.props['data-project-path'], 'D:\\alpha', 'hover path')
+  assertEqual(String(project.props['data-project-count']), '1', 'hover visible chat count')
+})
+
+await check('context menus suppress the hover surface on the sidebar root', () => {
+  const { harness } = scenario()
+  assert(!String(harness.tree.props.className).includes('dshss-menuActive'), 'idle by default')
+  dispatch(harness, harness.tree, 'onContextMenu', syntheticEvent({
+    target: contextTarget('row', { session: 's2' }),
+    clientX: 20,
+    clientY: 40,
+  }))
+  assert(String(harness.tree.props.className).includes('dshss-menuActive'), 'context menu marks the root')
+  const menu = findOne(harness.tree, (element) => element.props?.role === 'menu')
+  findAll(menu, (element) => element.type === 'button')[0].props.onClick()
+  harness.rerender()
+  assert(!String(harness.tree.props.className).includes('dshss-menuActive'), 'closing clears the root')
+})
+
 await check('per-project manual sort reorders its own conversation list', () => {
   const base = createWorkspaceSnapshot()
   const stamp = base.items[0].createdAt

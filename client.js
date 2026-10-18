@@ -122,6 +122,7 @@ window.__ModuleLoader__.load({
       'group.byProject': '按项目',
       'group.oneList': '单一列表',
       'hover.project': '工作区',
+      'hover.projectCount': '{n} 个对话',
       'newSession': '新建会话',
       'section.archived.empty': '还没有已归档会话',
       'project.newSession': '新会话',
@@ -233,6 +234,7 @@ window.__ModuleLoader__.load({
       'group.byProject': 'By project',
       'group.oneList': 'In one list',
       'hover.project': 'Workspace',
+      'hover.projectCount': '{n} chats',
       'newSession': 'New session',
       'section.archived.empty': 'No archived conversations yet',
       'project.newSession': 'New session',
@@ -1103,6 +1105,14 @@ window.__ModuleLoader__.load({
   min-width: 0;
   color: var(--dsw-alias-label-secondary);
 }
+.dshss-hoverPath {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
 .dshss-hoverProject {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1146,7 +1156,7 @@ window.__ModuleLoader__.load({
   user-select: none;
   color: var(--dsw-alias-label-primary);
 }
-.dshss-projectRow:hover, .dshss-projectRow.dshss-menuOpen {
+.dshss-projectRow:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 .dshss-projectRow:focus-visible, .dshss-row:focus-visible {
@@ -1195,7 +1205,10 @@ window.__ModuleLoader__.load({
   user-select: none;
   color: var(--dsw-alias-label-primary);
 }
-.dshss-row:hover, .dshss-row.dshss-menuOpen { background: var(--dsw-alias-interactive-bg-hover); }
+.dshss-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
+/* While any menu is open the triggering row must not keep its hover surface. */
+.dshss-root.dshss-menuActive .dshss-row:hover,
+.dshss-root.dshss-menuActive .dshss-projectRow:hover { background: transparent; }
 .dshss-row[draggable="true"] { cursor: grab; }
 .dshss-row.dshss-drop-before { box-shadow: inset 0 2px 0 var(--dsw-alias-label-primary); }
 .dshss-row.dshss-drop-after { box-shadow: inset 0 -2px 0 var(--dsw-alias-label-primary); }
@@ -1401,7 +1414,7 @@ window.__ModuleLoader__.load({
      */
     function SessionRow({
       node, selected, panelActive, onOpen, onTogglePin, onArchive, onMenuAction, t,
-      canDrag, dropHint, onDragStart, onDragOver, onDrop, onDragEnd,
+      canDrag, dropHint, onDragStart, onDragOver, onDrop, onDragEnd, onMenuOpenChange,
     }) {
       const [menuOpen, setMenuOpen] = useState(false)
       const showStatus = node.status.state !== 'idle'
@@ -1515,6 +1528,7 @@ window.__ModuleLoader__.load({
     function ProjectGroup({
       group, expanded, onToggle, onNewSession, onWorkspaceMenu, onSessionMenu,
       onOpen, onTogglePin, onArchive, panelActive, rowDrag, sortMode, onSort, t,
+      onMenuOpenChange,
     }) {
       const [menuOpen, setMenuOpen] = useState(false)
       const groupLabel = t('actions.workspace.aria', { name: group.label })
@@ -1525,6 +1539,9 @@ window.__ModuleLoader__.load({
           'aria-expanded': expanded,
           'aria-label': group.label,
           'data-workspace': group.key === '' ? '__ungrouped__' : group.key,
+          'data-project-label': group.label,
+          'data-project-path': group.path ?? '',
+          'data-project-count': group.nodes.length,
           tabIndex: 0,
           onClick: onToggle,
           onKeyDown: (event) => {
@@ -1594,6 +1611,7 @@ window.__ModuleLoader__.load({
                 onTogglePin: () => { onTogglePin(node) },
                 onArchive: () => { onArchive(node) },
                 onMenuAction: (action) => { onSessionMenu(node, action) },
+                onMenuOpenChange,
                 ...rowDrag(node, group.nodes.map((entry) => entry.id)),
                 t,
               })))
@@ -1620,7 +1638,7 @@ window.__ModuleLoader__.load({
      * @param {object} props - current modes, their dispatchers, and t.
      * @returns {object} the menu element.
      */
-    function SectionMenu({ label, grouping, onGrouping, sort, onSort, t }) {
+    function SectionMenu({ label, grouping, onGrouping, sort, onSort, t, onMenuOpenChange }) {
       const [open, setOpen] = useState(false)
       const items = []
       const selectedIds = []
@@ -1794,6 +1812,24 @@ window.__ModuleLoader__.load({
       }
       /** Start the row-hover dwell that opens the project preview card. */
       const hoverRow = (event) => {
+        const projectRow = event.target?.closest?.('.dshss-projectRow[data-workspace]')
+        if (projectRow !== null && projectRow !== undefined) {
+          if (hoverPreview !== null && hoverPreview.kind === 'project' && hoverPreview.key === projectRow.dataset.workspace) return
+          cancelHoverTimer()
+          const rect = projectRow.getBoundingClientRect()
+          hoverTimerRef.current = window.setTimeout(() => {
+            hoverTimerRef.current = null
+            setHoverPreview({
+              kind: 'project',
+              key: projectRow.dataset.workspace,
+              label: projectRow.dataset.projectLabel,
+              path: projectRow.dataset.projectPath,
+              count: Number(projectRow.dataset.projectCount),
+              rect: { right: rect.right, left: rect.left, top: rect.top },
+            })
+          }, 420)
+          return
+        }
         const row = event.target?.closest?.('.dshss-row')
         if (row === null || row === undefined) return
         if (hoverPreview !== null && hoverPreview.session === row.dataset.session) return
@@ -1812,7 +1848,7 @@ window.__ModuleLoader__.load({
       }
       /** Close the preview when the pointer leaves the row (or its actions). */
       const leaveRow = (event) => {
-        const row = event.target?.closest?.('.dshss-row')
+        const row = event.target?.closest?.('.dshss-row, .dshss-projectRow')
         if (row === null || row === undefined) return
         if (event.relatedTarget !== null && row.contains(event.relatedTarget)) return
         cancelHoverTimer()
@@ -2530,6 +2566,7 @@ window.__ModuleLoader__.load({
         const left = hoverPreview.rect.right + 12 + width > viewport
           ? hoverPreview.rect.left - width - 12
           : hoverPreview.rect.right + 12
+        const projectPreview = hoverPreview.kind === 'project'
         return createPortal(
           h('span', {
             className: 'dshss-hoverCard',
@@ -2537,16 +2574,27 @@ window.__ModuleLoader__.load({
             style: { left: Math.max(8, left) + 'px', top: Math.max(8, hoverPreview.rect.top - 4) + 'px' },
           },
           h('span', { className: 'dshss-hoverTop' },
-            h('span', { className: 'dshss-hoverTitle' }, hoverPreview.title),
-            hoverPreview.time ? h('span', { className: 'dshss-hoverTime' }, hoverPreview.time) : null),
-          h('span', { className: 'dshss-hoverMeta' },
-            h(IconFolderCloseRegular, { size: 14 }),
-            h('span', { className: 'dshss-hoverProject' }, hoverPreview.project))),
+            projectPreview ? h(IconFolderCloseRegular, { size: 14 }) : null,
+            h('span', { className: 'dshss-hoverTitle' }, projectPreview ? hoverPreview.label : hoverPreview.title),
+            !projectPreview && hoverPreview.time ? h('span', { className: 'dshss-hoverTime' }, hoverPreview.time) : null),
+          projectPreview
+            ? [
+              h('span', { key: 'count', className: 'dshss-hoverMeta' },
+                h(IconQueueOutlineRegular, { size: 14 }),
+                h('span', { className: 'dshss-hoverProject' }, t('hover.projectCount', { n: hoverPreview.count }))),
+              hoverPreview.path === '' ? null : h('span', { key: 'path', className: 'dshss-hoverMeta' },
+                h(IconFolderCloseRegular, { size: 14 }),
+                h('span', { className: 'dshss-hoverPath' }, hoverPreview.path)),
+            ]
+            : h('span', { className: 'dshss-hoverMeta' },
+              h(IconFolderCloseRegular, { size: 14 }),
+              h('span', { className: 'dshss-hoverProject' }, hoverPreview.project))),
           document.body)
       })()
 
+      const menuActive = contextMenu !== null
       return h('div', {
-        className: 'dshss-root' + contentWidth,
+        className: 'dshss-root' + contentWidth + (menuActive ? ' dshss-menuActive' : ''),
         onMouseOver: hoverRow,
         onMouseOut: leaveRow,
         onContextMenu: openContextMenu,
