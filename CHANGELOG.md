@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-10-18
+
+Repository layout: the plugin now owns its complete development setup.
+
+### Changed
+
+- `dsh-sidebar-sections` is a standalone Git repository. CI, `.editorconfig`,
+  `.gitattributes`, `.gitignore` and `CONTRIBUTING.md` moved from the parent
+  collection folder into this repository; the parent folder is only a workspace
+  that can hold several independent plugin repositories.
+- CI and the contributing guide now run from this repository root
+  (`node scripts/check.mjs`).
+
+### Verified
+
+- `node scripts/check.mjs`: 57 checks green.
+
 ## [2.2.0] - 2026-10-18
 
 Hover previews are now a surface you can move into, and the README ships a real screenshot.

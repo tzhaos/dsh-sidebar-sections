@@ -6,7 +6,7 @@
 变成 **置顶 / 项目 / 最近 / 归档** 四个分区的对话浏览器，带分区菜单、拖拽排序、右键菜单与悬停预览。
 
 ![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.2.1--rc.2-4D6BFE)
-![Version](https://img.shields.io/badge/version-2.2.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.1-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
 ![Checks](https://img.shields.io/badge/checks-57-brightgreen)
@@ -218,18 +218,24 @@ Harness 客户端 API 明确标注为预稳定。DSH 升级后请重新运行 `n
 
 ## 开发
 
+本插件是一个独立的 Git 仓库。上层的集合目录只是用来并列放置多个独立插件仓库的
+工作区；CI、编辑器配置与贡献规范都由本仓库自己维护。
+
 ```
-dsh-sidebar-sections/
+dsh-sidebar-sections/         # 仓库根目录
 ├── package.json              # bundle patch + dsh.client 清单、exports、files
 ├── cordis.patch.yml          # 插入 `sidebar-sections` Loader 行
 ├── index.js                  # Host 半部：空 apply（用于发现 bundle）
 ├── client.js                 # 浏览器半部：纯 JS，无构建步骤
 ├── icon.svg                  # 插件管理器图标
 ├── locale/                   # 插件管理器标题/描述（en、zh）
-├── docs/layout.svg           # README 布局示意
+├── docs/screenshot.png       # README 实机截图
 ├── scripts/check.mjs         # 零依赖验证套件
+├── .github/workflows/check.yml  # CI：node scripts/check.mjs
+├── .editorconfig / .gitattributes / .gitignore
 ├── README.md / README.zh.md
 ├── CHANGELOG.md
+├── CONTRIBUTING.md
 └── LICENSE
 ```
 
@@ -240,7 +246,7 @@ dsh-sidebar-sections/
 3. 修改 `client.js`，运行中的页面约半秒内热更新浏览器挂载。
 4. 只有 `index.js` / `package.json` 变更才需要重组或重启。
 
-贡献约定见 [CONTRIBUTING.md](../CONTRIBUTING.md)，要点：浏览器半部保持零依赖且只允许平台
+贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)，要点：浏览器半部保持零依赖且只允许平台
 模块表；不声明子 slot；复用 `ui-primitives`；只使用主题 token；中英字典保持同步；用户可见变更
 写入 `CHANGELOG.md`。
 
@@ -291,7 +297,7 @@ dsh-sidebar-sections/
 
 ## 贡献
 
-欢迎 issue 与 pull request。动手前请阅读 [CONTRIBUTING.md](../CONTRIBUTING.md)，并在提交前
+欢迎 issue 与 pull request。动手前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，并在提交前
 运行 `node scripts/check.mjs`；保持中英 README 与 `CHANGELOG.md` 同步。
 
 ## 许可证

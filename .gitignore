@@ -1,0 +1,7 @@
+# Local scratch and transient artifacts (never part of the plugin payload).
+node_modules/
+dist/
+*.log
+*.tgz
+.DS_Store
+Thumbs.db

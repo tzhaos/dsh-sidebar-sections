@@ -7,7 +7,7 @@ sidebar into a **Pinned / Projects / Recent / Archived** conversation browser �
 menus, drag ordering, context menus and hover previews.
 
 ![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.2.1--rc.2-4D6BFE)
-![Version](https://img.shields.io/badge/version-2.2.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.1-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
 ![Checks](https://img.shields.io/badge/checks-57-brightgreen)
@@ -239,8 +239,12 @@ Harness client APIs are explicitly pre-stable. After a DSH upgrade, rerun
 
 ## Development
 
+This plugin is its own Git repository. The parent collection folder is just a
+workspace that may contain several independent plugin repositories; this
+repository owns its CI, editor settings, and contribution rules.
+
 ```
-dsh-sidebar-sections/
+dsh-sidebar-sections/         # repository root
 ├── package.json              # bundle patch + dsh.client manifest, exports, files
 ├── cordis.patch.yml          # inserts the `sidebar-sections` Loader row
 ├── index.js                  # Host half: no-op apply (bundle discovery)
@@ -249,8 +253,11 @@ dsh-sidebar-sections/
 ├── locale/                   # plugin-manager title/description (en, zh)
 ├── docs/screenshot.png       # README screenshot
 ├── scripts/check.mjs         # zero-dependency verification suite
+├── .github/workflows/check.yml  # CI: node scripts/check.mjs
+├── .editorconfig / .gitattributes / .gitignore
 ├── README.md / README.zh.md
 ├── CHANGELOG.md
+├── CONTRIBUTING.md
 └── LICENSE
 ```
 
@@ -261,7 +268,7 @@ Inner loop:
 3. Edit `client.js`; the running page hot-updates the browser mount in about half a second.
 4. Only `index.js` / `package.json` changes need a recompose or restart.
 
-Contribution rules are summarized in [CONTRIBUTING.md](../CONTRIBUTING.md); the essentials:
+Contribution rules are summarized in [CONTRIBUTING.md](CONTRIBUTING.md); the essentials:
 keep the browser half dependency-free and platform-table-only, never declare child slots, reuse
 `ui-primitives`, use theme tokens, keep zh/en dictionaries in sync, and log user-visible changes in
 `CHANGELOG.md`.
@@ -317,7 +324,7 @@ layout, and the pre-stable Host UI beyond the contracts above.
 
 ## Contributing
 
-Issues and pull requests are welcome. Read [CONTRIBUTING.md](../CONTRIBUTING.md) first; run
+Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first; run
 `node scripts/check.mjs` before opening a PR. Keep both README languages and `CHANGELOG.md` in sync.
 
 ## License
