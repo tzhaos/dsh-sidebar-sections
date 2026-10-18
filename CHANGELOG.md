@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.4] - 2026-10-18
+
+### Fixed
+
+- Hover previews could outlive their row when the row disappeared without a `mouseleave` event —
+  archiving or deleting the hovered session, filtering the list, collapsing a section, or a Host
+  list refresh could leave an orphan card on screen.
+- Moving the pointer onto a row action button, scrolling the sidebar under a stationary pointer,
+  pressing outside the card, losing window visibility, or leaving the app window now dismisses the
+  preview reliably.
+- The preview also closes on `Escape`, and its row is revalidated against the current projection on
+  every render.
+
+### Verified
+
+- `node scripts/check.mjs`: 63 checks green (six new hover-lifecycle regression checks).
+
 ## [2.2.3] - 2026-10-18
 
 ### Documentation

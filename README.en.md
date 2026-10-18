@@ -7,10 +7,10 @@ sidebar into a **Pinned / Projects / Recent / Archived** conversation browser �
 menus, drag ordering, context menus and file-manager shortcuts.
 
 ![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.2.1--rc.2-4D6BFE)
-![Version](https://img.shields.io/badge/version-2.2.3-blue)
+![Version](https://img.shields.io/badge/version-2.2.4-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
-![Checks](https://img.shields.io/badge/checks-57-brightgreen)
+![Checks](https://img.shields.io/badge/checks-63-brightgreen)
 
 ![Sidebar sections, section menu and project menu](docs/screenshot.png)
 
@@ -280,7 +280,7 @@ keep the browser half dependency-free and platform-table-only, never declare chi
 
 ## Testing
 
-`scripts/check.mjs` is a zero-dependency Node suite (57 checks) covering:
+`scripts/check.mjs` is a zero-dependency Node suite (63 checks) covering:
 
 - package manifest, exports, `files`, bundle patch, localized display metadata, icon bounds, and
   platform-only `require`s (plus the “no hand-copied SVG paths” reuse rule);

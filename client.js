@@ -1829,6 +1829,19 @@ window.__ModuleLoader__.load({
         t,
       }), [list, workspaceSnapshot, statuses, query, now, recentLimit, t])
 
+      // Keys that currently have a rendered row. A preview must not outlive its
+      // trigger: archiving, filtering, deleting or collapsing can unmount the
+      // row without a mouseleave event ever firing.
+      const hoverSessionIds = useMemo(() => {
+        const ids = new Set()
+        for (const node of sections.pinned) ids.add(node.id)
+        for (const node of sections.recentAll) ids.add(node.id)
+        for (const node of sections.archivedNodes) ids.add(node.id)
+        for (const group of sections.projects) for (const node of group.nodes) ids.add(node.id)
+        return ids
+      }, [sections])
+      const hoverProjectKeys = useMemo(() => new Set(sections.projects.map((group) => group.key)), [sections])
+
       useEffect(() => {
         if (!searchOpen) return
         inputRef.current?.focus()
@@ -1889,6 +1902,12 @@ window.__ModuleLoader__.load({
           hoverClearTimerRef.current = null
           setHoverPreview(null)
         }, HOVER_LINGER_MS)
+      }
+      /** Cancel both hover timers and drop the preview immediately. */
+      const dismissHoverPreview = () => {
+        cancelHoverTimer()
+        cancelHoverClear()
+        setHoverPreview(null)
       }
       /** Whether a pointer target is inside the rendered preview card. */
       const insideHoverCard = (target) => {
@@ -1967,14 +1986,106 @@ window.__ModuleLoader__.load({
           cancelHoverClear()
           setHoverPreview(null)
         }
+        const onVisibilityChange = () => {
+          if (typeof document !== 'undefined' && document.visibilityState === 'hidden') closePreview()
+        }
         window.addEventListener('blur', closePreview)
+        document.addEventListener?.('visibilitychange', onVisibilityChange)
         const root = typeof document === 'undefined' ? undefined : document.documentElement
         if (root !== undefined && root !== null) root.addEventListener('mouseleave', closePreview)
         return () => {
           window.removeEventListener('blur', closePreview)
+          document.removeEventListener?.('visibilitychange', onVisibilityChange)
           if (root !== undefined && root !== null) root.removeEventListener('mouseleave', closePreview)
         }
       }, [])
+
+      // A row can disappear while the preview is open (archive, delete, filter,
+      // section collapse, search or a Host list refresh). Reproject the visible
+      // key sets and drop the preview if its owner is no longer rendered.
+      useEffect(() => {
+        if (hoverPreview === null) return
+        const present = hoverPreview.kind === 'project'
+          ? hoverProjectKeys.has(hoverPreview.key)
+          : hoverSessionIds.has(hoverPreview.session)
+        if (!present) dismissHoverPreview()
+      }, [hoverPreview, hoverProjectKeys, hoverSessionIds])
+
+      // Collapse/expand changes row visibility without changing the derived
+      // node sets; close any preview anchored to a section that is going away.
+      useEffect(() => {
+        if (hoverPreview !== null) dismissHoverPreview()
+      }, [collapsed, collapsedSections])
+
+      // While a preview is open, track the real pointer. This catches leaving
+      // the row for another row, empty sidebar space, a row action button, or
+      // a row that was removed under a stationary pointer.
+      useEffect(() => {
+        if (hoverPreview === null) return undefined
+        if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return undefined
+        const onPointerMove = (event) => {
+          const target = event.target
+          if (insideHoverCard(target)) {
+            cancelHoverClear()
+            return
+          }
+          const row = target?.closest?.('.dshss-row')
+          const projectRow = target?.closest?.('.dshss-projectRow[data-workspace]')
+          const sameRow = hoverPreview.kind === 'project'
+            ? projectRow !== null && projectRow !== undefined && projectRow.dataset.workspace === hoverPreview.key
+            : row !== null && row !== undefined && row.dataset.session === hoverPreview.session
+          if (!sameRow) {
+            scheduleHoverClear()
+            return
+          }
+          if (target?.closest?.('.dshss-rowActions') !== null && target?.closest?.('.dshss-rowActions') !== undefined) {
+            scheduleHoverClear()
+            return
+          }
+          cancelHoverClear()
+        }
+        document.addEventListener('pointermove', onPointerMove, true)
+        return () => { document.removeEventListener('pointermove', onPointerMove, true) }
+      }, [hoverPreview])
+
+      // Scrolling moves the row away from the pointer without a mouseleave.
+      useEffect(() => {
+        if (hoverPreview === null) return undefined
+        if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return undefined
+        const onScroll = (event) => {
+          if (insideHoverCard(event.target)) return
+          scheduleHoverClear()
+        }
+        document.addEventListener('scroll', onScroll, true)
+        return () => { document.removeEventListener('scroll', onScroll, true) }
+      }, [hoverPreview])
+
+      // Any press outside the card dismisses the preview before the click can
+      // mutate the list and strand an orphan card.
+      useEffect(() => {
+        if (hoverPreview === null) return undefined
+        if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return undefined
+        const onPointerDown = (event) => {
+          if (insideHoverCard(event.target)) return
+          dismissHoverPreview()
+        }
+        document.addEventListener('pointerdown', onPointerDown, true)
+        return () => { document.removeEventListener('pointerdown', onPointerDown, true) }
+      }, [hoverPreview])
+
+      // Escape is a predictable escape hatch for a stray preview.
+      useEffect(() => {
+        if (hoverPreview === null) return undefined
+        if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return undefined
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape') return
+          event.preventDefault?.()
+          event.stopPropagation?.()
+          dismissHoverPreview()
+        }
+        document.addEventListener('keydown', onKeyDown, true)
+        return () => { document.removeEventListener('keydown', onKeyDown, true) }
+      }, [hoverPreview])
 
       /** Open a conversation; archived rows explain why they stay closed. */
       const openNode = (node) => {

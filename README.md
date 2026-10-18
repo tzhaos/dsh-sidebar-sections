@@ -6,10 +6,10 @@
 变成 **置顶 / 项目 / 最近 / 归档** 四个分区的对话浏览器，带分区菜单、拖拽排序、右键菜单与文件管理器快捷入口。
 
 ![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.2.1--rc.2-4D6BFE)
-![Version](https://img.shields.io/badge/version-2.2.3-blue)
+![Version](https://img.shields.io/badge/version-2.2.4-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
-![Checks](https://img.shields.io/badge/checks-57-brightgreen)
+![Checks](https://img.shields.io/badge/checks-63-brightgreen)
 
 ![侧边栏分区、分区菜单与项目菜单](docs/screenshot.png)
 
@@ -255,7 +255,7 @@ dsh-sidebar-sections/         # 仓库根目录
 
 ## 测试
 
-`scripts/check.mjs` 是零依赖 Node 套件（57 项），覆盖：
+`scripts/check.mjs` 是零依赖 Node 套件（63 项），覆盖：
 
 - 包清单、exports、`files`、bundle patch、插件管理器显示元数据、图标、仅平台模块，以及
   「禁止手抄 SVG 路径」的复用规则；

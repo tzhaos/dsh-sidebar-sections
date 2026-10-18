@@ -296,6 +296,36 @@ function createFakeWindow() {
   }
 }
 
+/** Detectable browser document used by lifecycle listeners and portals. */
+function createFakeDocument() {
+  const listeners = new Map()
+  const elementListeners = new Map()
+  return {
+    body: {},
+    documentElement: {
+      addEventListener(type, callback) {
+        if (!elementListeners.has(type)) elementListeners.set(type, [])
+        elementListeners.get(type).push(callback)
+      },
+      removeEventListener(type, callback) {
+        elementListeners.set(type, (elementListeners.get(type) ?? []).filter((entry) => entry !== callback))
+      },
+    },
+    visibilityState: 'visible',
+    addEventListener(type, callback) {
+      if (!listeners.has(type)) listeners.set(type, [])
+      listeners.get(type).push(callback)
+    },
+    removeEventListener(type, callback) {
+      listeners.set(type, (listeners.get(type) ?? []).filter((entry) => entry !== callback))
+    },
+    dispatch(type, event) {
+      for (const callback of listeners.get(type) ?? []) callback(event)
+    },
+    listenerCount(type) { return (listeners.get(type) ?? []).length },
+  }
+}
+
 /** Deterministic relative-time stand-in (tests do not assert labels). */
 function fakeRelativeTime() {
   return { unit: 'now', n: 0 }
@@ -389,12 +419,12 @@ function createFakePrimitives(reactRuntime) {
  * @param {object} browserWindow - fake window.
  * @returns {{registration: object, plugin: object}} captured module and plugin.
  */
-function loadClientModule(reactRuntime, primitives, browserWindow) {
+function loadClientModule(reactRuntime, primitives, browserWindow, fakeDocument) {
   const source = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
   let captured = null
   const sandbox = {
     window: { ...browserWindow, __ModuleLoader__: { load(registration) { captured = registration } } },
-    document: { body: {} },
+    document: fakeDocument,
     console,
     Date, JSON, Math, Promise, Set, Map, Symbol, Object, Array, String, Number, Boolean,
   }
@@ -429,6 +459,7 @@ function applyPlugin() {
   const reactRuntime = createFakeReact()
   const primitives = createFakePrimitives(reactRuntime)
   const browserWindow = createFakeWindow()
+  const fakeDocument = createFakeDocument()
   const calls = []
   const services = {
     uiWorkspace: {
@@ -494,9 +525,9 @@ function applyPlugin() {
       },
     },
   }
-  const { plugin } = loadClientModule(reactRuntime, primitives, browserWindow)
+  const { plugin } = loadClientModule(reactRuntime, primitives, browserWindow, fakeDocument)
   plugin.apply(ctx)
-  return { calls, services, registrations, localeRegistrations, reactRuntime, primitives, browserWindow }
+  return { calls, services, registrations, localeRegistrations, reactRuntime, primitives, browserWindow, fakeDocument }
 }
 
 // ---------------------------------------------------------------------------
@@ -1130,6 +1161,22 @@ function hoverTarget(kind, dataset, rect = { right: 260, left: 20, top: 120 }) {
   }
 }
 
+/** Open the conversation preview for one rendered row and return its dataset. */
+function openRowHover(harness, browserWindow, title = 'Alpha talk') {
+  const row = findAllSessionRows(harness.tree, title)[0]
+  const dataset = {
+    session: row.props['data-session'],
+    title: row.props['data-title'],
+    project: row.props['data-project'],
+    time: row.props['data-time'],
+  }
+  dispatch(harness, harness.tree, 'onMouseOver', syntheticEvent({ target: hoverTarget('row', dataset) }))
+  browserWindow.__runTimers()
+  harness.rerender()
+  assert(findOne(harness.tree, (element) => element.props?.className === 'dshss-hoverCard'), 'hover card opened')
+  return dataset
+}
+
 await check('context menus suppress the hover surface on the sidebar root', () => {
   const { harness } = scenario()
   assert(!String(harness.tree.props.className).includes('dshss-menuActive'), 'idle by default')
@@ -1533,6 +1580,76 @@ await check('project hover card shows name, visible count and path', () => {
   assert(body.includes('Alpha project'), 'project name in hover card')
   assert(body.includes(t('hover.projectCount', { n: 1 })), 'visible chat count in hover card')
   assert(body.includes('D:\\alpha'), 'project path in hover card')
+})
+
+await check('pointer leaving the row and card dismisses the preview', () => {
+  const { harness, browserWindow, fakeDocument } = scenario()
+  openRowHover(harness, browserWindow)
+  fakeDocument.dispatch('pointermove', { target: {} })
+  browserWindow.__runTimers()
+  harness.rerender()
+  assertEqual(findAll(harness.tree, (element) => element.props?.className === 'dshss-hoverCard').length, 0,
+    'hover card cleared after the pointer leaves')
+})
+
+await check('moving onto a row action dismisses the preview', () => {
+  const { harness, browserWindow, fakeDocument } = scenario()
+  openRowHover(harness, browserWindow)
+  const row = { dataset: { session: 's2' } }
+  const action = {}
+  fakeDocument.dispatch('pointermove', {
+    target: {
+      closest(selector) {
+        if (selector === '.dshss-row') return row
+        if (selector === '.dshss-rowActions') return action
+        return null
+      },
+    },
+  })
+  browserWindow.__runTimers()
+  harness.rerender()
+  assertEqual(findAll(harness.tree, (element) => element.props?.className === 'dshss-hoverCard').length, 0,
+    'hover card cleared on row actions')
+})
+
+await check('scrolling the sidebar dismisses the preview', () => {
+  const { harness, browserWindow, fakeDocument } = scenario()
+  openRowHover(harness, browserWindow)
+  fakeDocument.dispatch('scroll', { target: {} })
+  browserWindow.__runTimers()
+  harness.rerender()
+  assertEqual(findAll(harness.tree, (element) => element.props?.className === 'dshss-hoverCard').length, 0,
+    'hover card cleared on scroll')
+})
+
+await check('pressing outside the preview dismisses it immediately', () => {
+  const { harness, browserWindow, fakeDocument } = scenario()
+  openRowHover(harness, browserWindow)
+  fakeDocument.dispatch('pointerdown', { target: {} })
+  harness.rerender()
+  assertEqual(findAll(harness.tree, (element) => element.props?.className === 'dshss-hoverCard').length, 0,
+    'hover card cleared on outside press')
+})
+
+await check('removing the hovered row from the list dismisses its preview', () => {
+  let list = createSessionList()
+  const { harness, browserWindow } = scenario({ useSessions: (selector) => selector(list) })
+  openRowHover(harness, browserWindow)
+  const nextById = { ...list.byId }
+  delete nextById.s2
+  list = { ...list, ids: list.ids.filter((id) => id !== 's2'), byId: nextById }
+  harness.rerender()
+  assertEqual(findAll(harness.tree, (element) => element.props?.className === 'dshss-hoverCard').length, 0,
+    'hover card cleared with its row')
+})
+
+await check('Escape dismisses the preview', () => {
+  const { harness, browserWindow, fakeDocument } = scenario()
+  openRowHover(harness, browserWindow)
+  fakeDocument.dispatch('keydown', { key: 'Escape', preventDefault() {}, stopPropagation() {} })
+  harness.rerender()
+  assertEqual(findAll(harness.tree, (element) => element.props?.className === 'dshss-hoverCard').length, 0,
+    'hover card cleared on Escape')
 })
 
 // ---------------------------------------------------------------------------
