@@ -6,10 +6,10 @@
 变成 **置顶 / 项目 / 最近 / 归档** 四个分区的对话浏览器，带分区菜单、拖拽排序、右键菜单、安全删除、插件设置与文件管理器快捷入口。
 
 ![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.2.1--rc.2-4D6BFE)
-![Version](https://img.shields.io/badge/version-2.3.0-blue)
+![Version](https://img.shields.io/badge/version-2.4.0-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
-![Checks](https://img.shields.io/badge/checks-67-brightgreen)
+![Checks](https://img.shields.io/badge/checks-68-brightgreen)
 
 ![dsh-sidebar-sections 2.3.0：四分区侧边栏、分区菜单与项目菜单](docs/screenshot.png)
 
@@ -42,7 +42,7 @@
 - **最近**是不受历史长度限制的时间线。
 - 所有管理动作（置顶、归档、重命名、分叉、复制 Session ID、调整顺序）都仍然走宿主 API，
   关键数据不会只存在插件内存里。
-- 安全删除只移除侧边栏视图记录，并在插件设置里提供恢复；不会静默修改宿主数据。
+- 安全删除可从任意会话行的菜单触发，只移除侧边栏视图记录，并在插件设置里提供恢复；不会静默修改宿主数据。
 
 ## 功能
 
@@ -92,9 +92,9 @@
 - **显示归档分区**：开启/关闭归档分区；关闭后归档会话仍保留在宿主中。
 - **已移除的会话**：安全删除的会话会列在这里，可一键恢复。
 
-安全删除入口在归档行的右键/`⋯` 菜单里。删除前会弹确认框；操作只把会话从本插件的侧边栏
-视图中移除，并在浏览器本地记录一个可恢复的 tombstone，不会调用宿主删除 API，也不会修改磁盘上
-的会话记录。恢复后会话回到原来的分区。
+安全删除入口在**每一行**的右键/`⋯` 菜单里（当前打开的会话除外）。删除前会弹确认框；操作只把
+会话从本插件的侧边栏视图中移除，并在浏览器本地记录一个可恢复的 tombstone，不会调用宿主删除
+API，也不会修改磁盘上的会话记录。恢复后会话回到原来的分区。
 
 ### 搜索与视图状态
 
@@ -267,7 +267,7 @@ dsh-sidebar-sections/         # 仓库根目录
 
 ## 测试
 
-`scripts/check.mjs` 是零依赖 Node 套件（67 项），覆盖：
+`scripts/check.mjs` 是零依赖 Node 套件（68 项），覆盖：
 
 - 包清单、exports、`files`、bundle patch、插件管理器显示元数据、图标、仅平台模块，以及
   「禁止手抄 SVG 路径」的复用规则；

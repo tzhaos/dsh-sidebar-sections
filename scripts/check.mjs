@@ -987,6 +987,19 @@ await check('safe delete dialog explains that the conversation record is kept', 
   assertEqual(stored.removed.map((entry) => entry.id), ['s4'], 'dialog writes a tombstone')
 })
 
+await check('non-archived conversation rows offer safe delete', () => {
+  const { harness, t, registrations } = scenario()
+  const overlay = registrations.find((entry) => entry.options.name === 'shell.overlay')
+  const request = overlay.options.inject().hooks.request
+  const row = findSessionRow(harness.tree, t, 'Alpha talk')
+  const anchor = findButton(row, t, 'actions.session.aria', { name: 'Alpha talk' })
+  dispatch(harness, anchor, 'onClick', syntheticEvent())
+  const items = menuItems(findSessionRow(harness.tree, t, 'Alpha talk'))
+  assertEqual(items.map(textOf).at(-1), t('menu.deleteSession'), 'safe delete on a normal row')
+  items.at(-1).props.onClick()
+  assertEqual(request.getSnapshot().kind, 'delete-session', 'safe-delete dialog requested')
+})
+
 await check('the current conversation cannot be safely deleted', () => {
   const list = createSessionList()
   list.byId.s4 = { ...list.byId.s4, retainedBy: { mainView: 1 } }
@@ -1035,7 +1048,7 @@ await check('session row menu offers pin/rename/fork/archive/copy-id and dispatc
   let items = openRowMenu('Alpha talk')
   assertEqual(items.map(textOf), [
     t('menu.pinSession'), t('menu.renameSession'), t('menu.forkSession'),
-    t('menu.archiveSession'), t('menu.sessionId'),
+    t('menu.archiveSession'), t('menu.sessionId'), t('menu.deleteSession'),
   ], 'session menu items')
 
   items[1].props.onClick()
@@ -1104,7 +1117,8 @@ await check('right-clicking a conversation row opens its action menu', () => {
   const menu = findOne(harness.tree, (element) => element.props?.role === 'menu')
   const items = findAll(menu, (element) => element.type === 'button')
   assertEqual(items.map(textOf), [
-    t('menu.pinSession'), t('menu.renameSession'), t('menu.forkSession'), t('menu.archiveSession'), t('menu.sessionId'),
+    t('menu.pinSession'), t('menu.renameSession'), t('menu.forkSession'), t('menu.archiveSession'),
+    t('menu.sessionId'), t('menu.deleteSession'),
   ], 'row context menu items')
   items[3].props.onClick()
   assertEqual(calls.at(-1), ['archiveSession', 's2', false], 'context menu dispatches archive')
@@ -1195,7 +1209,7 @@ await check('keyboard opens the context menu on a row and a section heading', ()
   dispatch(harness, row, 'onKeyDown', syntheticEvent({ key: 'ContextMenu', shiftKey: false }))
   assert(String(harness.tree.props.className).includes('dshss-menuActive'), 'row context menu opened')
   let menu = findOne(harness.tree, (element) => element.props?.role === 'menu')
-  assertEqual(findAll(menu, (element) => element.type === 'button').length, 5, 'row context menu items')
+  assertEqual(findAll(menu, (element) => element.type === 'button').length, 6, 'row context menu items')
   findAll(menu, (element) => element.type === 'button')[0].props.onClick()
   harness.rerender()
   assert(!String(harness.tree.props.className).includes('dshss-menuActive'), 'row context menu closed')

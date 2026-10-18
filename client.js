@@ -1497,7 +1497,7 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Conversation-row menu entries; archived rows omit Pin.
+     * Conversation-row menu entries; archived rows omit Pin. Every row gets the safe-delete action.
      * @param {object} node - rendered row node.
      * @param {Function} t - translate seat.
      * @returns {object[]} menu entries.
@@ -1521,15 +1521,13 @@ window.__ModuleLoader__.load({
         },
         { id: 'copy-id', label: t('menu.sessionId'), icon: h(IconCopyOutlineRegular, { size: 14 }), separatorBefore: true },
       )
-      if (node.archived) {
-        items.push({
-          id: 'delete-session',
-          label: t('menu.deleteSession'),
-          icon: h(IconTrashOutlineRegular, { size: 14 }),
-          danger: true,
-          separatorBefore: true,
-        })
-      }
+      items.push({
+        id: 'delete-session',
+        label: t('menu.deleteSession'),
+        icon: h(IconTrashOutlineRegular, { size: 14 }),
+        danger: true,
+        separatorBefore: true,
+      })
       return items
     }
 

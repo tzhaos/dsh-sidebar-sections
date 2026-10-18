@@ -7,10 +7,10 @@ sidebar into a **Pinned / Projects / Recent / Archived** conversation browser �
 menus, drag ordering, context menus, safe delete, plugin settings and file-manager shortcuts.
 
 ![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.2.1--rc.2-4D6BFE)
-![Version](https://img.shields.io/badge/version-2.3.0-blue)
+![Version](https://img.shields.io/badge/version-2.4.0-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
-![Checks](https://img.shields.io/badge/checks-67-brightgreen)
+![Checks](https://img.shields.io/badge/checks-68-brightgreen)
 
 ![dsh-sidebar-sections 2.3.0: four sidebar sections, section menu and project menu](docs/screenshot.png)
 
@@ -101,7 +101,7 @@ Open **Settings → Built-in plugins → Sidebar sections**:
 - **Removed conversations** — safely deleted conversations are listed here and can be restored in
   one click.
 
-Safe delete is available from an archived row's context menu or `⋯` menu. A confirmation dialog
+Safe delete is available from every row's context menu or `⋯` menu (except the open conversation). A confirmation dialog
 precedes it. The operation removes the conversation from every sidebar section and stores a
 restorable browser-local tombstone; it does not call a Host delete API and does not alter the session
 record on disk. Restoring puts the conversation back in its original section.
@@ -294,7 +294,7 @@ keep the browser half dependency-free and platform-table-only, never declare chi
 
 ## Testing
 
-`scripts/check.mjs` is a zero-dependency Node suite (67 checks) covering:
+`scripts/check.mjs` is a zero-dependency Node suite (68 checks) covering:
 
 - package manifest, exports, `files`, bundle patch, localized display metadata, icon bounds, and
   platform-only `require`s (plus the “no hand-copied SVG paths” reuse rule);

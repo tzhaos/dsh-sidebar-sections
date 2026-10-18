@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-10-19
+
+### Added
+
+- Safe delete is now available from every conversation row, not only archived rows. The open
+  conversation stays protected and the confirmation dialog still explains that the conversation
+  record is kept.
+
+### Verified
+
+- `node scripts/check.mjs`: 68 checks green, including safe delete on a non-archived row.
+
 ## [2.3.0] - 2026-10-18
 
 ### Added
