@@ -1059,10 +1059,11 @@ window.__ModuleLoader__.load({
   max-width: 420px;
   box-sizing: border-box;
   padding: 10px 12px;
-  border: 0.5px solid var(--dsw-alias-border-l4);
+  border: 0;
   border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-layer-1);
   box-shadow: var(--dsw-shadow-lv3);
+  box-shadow: var(--dsw-elevation-prominent), var(--dsw-shadow-lv2);
   pointer-events: auto;
 }
 .dshss-hoverTop {

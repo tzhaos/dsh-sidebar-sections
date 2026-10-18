@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] - 2026-10-18
+
+### Fixed
+
+- Hover preview card: replaced the layout border with the Host elevation hairline
+  (`--dsw-elevation-prominent`) and layered the `lv2` shadow, so the edge renders thinner and the
+  card sits visibly deeper on the page.
+
 ## [2.2.1] - 2026-10-18
 
 Repository layout: the plugin now owns its complete development setup.

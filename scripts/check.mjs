@@ -155,6 +155,9 @@ await check('stylesheet uses theme tokens, not literal colors', () => {
   const css = clientSource.slice(cssStart, cssEnd)
   assertEqual([...css.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((match) => match[0]), [], 'literal colors')
   assert(css.includes('var(--dsw-'), 'theme tokens required')
+  const hoverRule = /\.dshss-hoverCard\s*\{([\s\S]*?)\}/.exec(css)?.[1] ?? ''
+  assert(!/border:\s*0?\.5px solid/.test(hoverRule), 'hover card uses no layout border')
+  assert(hoverRule.includes('var(--dsw-elevation-prominent)'), 'hover card uses host elevation shadow')
 })
 
 // ---------------------------------------------------------------------------
