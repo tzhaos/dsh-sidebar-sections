@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sidebar Sections",
+    "description": "Divides the sidebar into Pinned, Projects, and Recent conversations, and adds pin or unpin to every conversation row."
+  }
+}

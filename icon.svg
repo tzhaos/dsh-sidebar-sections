@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Sidebar Sections">
+  <rect width="64" height="64" rx="14" fill="#4D6BFE"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 22h36"/>
+    <path d="M14 32h26"/>
+    <path d="M14 42h30"/>
+  </g>
+  <g transform="translate(38 14) rotate(45)">
+    <path d="M0 -4 L0 6" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+    <path d="M-5 -2 L5 -2 L4 3 L-4 3 Z" fill="#FFFFFF"/>
+  </g>
+</svg>

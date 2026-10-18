@@ -1,0 +1,12 @@
+# Bundle patch for dsh-sidebar-sections.
+#
+# The bundle has two halves and both are discovered from this one row:
+#   - the Host half (./index.js) is a no-op apply; it exists so the package is a
+#     Loader entry, which is also how the Client module registry finds the
+#     browser bundle;
+#   - the Client half (./client.js) is declared by package.json's `dsh.client`
+#     and replaces the shipped Workspace browser in the `sidebar.workspaces`
+#     slot at a lower (winning) priority.
+- insert:
+    - id: sidebar-sections
+      name: 'dsh-sidebar-sections'
