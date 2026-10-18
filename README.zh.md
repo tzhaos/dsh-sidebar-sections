@@ -3,7 +3,7 @@
 [English](README.md) | 简体中文
 
 一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 客户端插件：把侧边栏
-变成 **置顶 / 项目 / 最近 / 归档** 四个分区的对话浏览器，带分区菜单、拖拽排序、右键菜单与悬停预览。
+变成 **置顶 / 项目 / 最近 / 归档** 四个分区的对话浏览器，带分区菜单、拖拽排序、右键菜单与文件管理器快捷入口。
 
 ![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.2.1--rc.2-4D6BFE)
 ![Version](https://img.shields.io/badge/version-2.2.1-blue)
@@ -11,7 +11,7 @@
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
 ![Checks](https://img.shields.io/badge/checks-57-brightgreen)
 
-![侧边栏分区与项目悬停预览](docs/screenshot.png)
+![侧边栏分区、分区菜单与项目菜单](docs/screenshot.png)
 
 ## 目录
 
@@ -153,7 +153,6 @@ junction；使用 Plugin Manager 时对应 `remove_bundle`。
 5. **打开项目目录**：右键项目行（或点 `⋯`）选择**在文件管理器中打开**。
 6. **查找**：在搜索行输入；匹配分组自动展开；`Esc` 关闭。
 7. **不用鼠标打开菜单**：聚焦行/项目/分区标题后按 `Shift+F10`。
-8. **悬停预览**：在对话行或项目行停留约 400ms，卡片出现；移出后消失。
 
 ## 实现原理
 

@@ -4,7 +4,7 @@ English | [简体中文](README.zh.md)
 
 A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI plugin that turns the
 sidebar into a **Pinned / Projects / Recent / Archived** conversation browser — with per-section
-menus, drag ordering, context menus and hover previews.
+menus, drag ordering, context menus and file-manager shortcuts.
 
 ![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.2.1--rc.2-4D6BFE)
 ![Version](https://img.shields.io/badge/version-2.2.1-blue)
@@ -12,7 +12,7 @@ menus, drag ordering, context menus and hover previews.
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
 ![Checks](https://img.shields.io/badge/checks-57-brightgreen)
 
-![Sidebar sections with the project hover preview](docs/screenshot.png)
+![Sidebar sections, section menu and project menu](docs/screenshot.png)
 
 ## Table of contents
 
