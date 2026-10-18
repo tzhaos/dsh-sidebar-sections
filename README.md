@@ -7,7 +7,7 @@ sidebar into a **Pinned / Projects / Recent / Archived** conversation browser �
 menus, drag ordering, context menus and hover previews.
 
 ![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.2.1--rc.2-4D6BFE)
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
+![Version](https://img.shields.io/badge/version-2.1.0-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
 ![Checks](https://img.shields.io/badge/checks-56-brightgreen)
@@ -165,9 +165,11 @@ then remove the dependency and the junction. With the Plugin Manager this is `re
    offer grouping and order; each project row's `⋯` menu adds a project-level override.
 4. **Reorder manually** — choose Manual order, then drag rows. Project-level manual order applies
    even when the section itself is on Last updated.
-5. **Find** — type in the search row. Matching groups expand; `Esc` closes.
-6. **Open a menu without the mouse** — focus a row/project/heading and press `Shift+F10`.
-7. **Inspect before opening** — hover a conversation or project row; the preview card appears after
+5. **Open a project folder** — right-click a project row (or use its `⋯` menu) and choose
+   **Open in File Manager**.
+6. **Find** — type in the search row. Matching groups expand; `Esc` closes.
+7. **Open a menu without the mouse** — focus a row/project/heading and press `Shift+F10`.
+8. **Inspect before opening** — hover a conversation or project row; the preview card appears after
    ~400 ms and disappears when the pointer leaves.
 
 ## Architecture
@@ -202,6 +204,8 @@ ui-sidebar slot
   `ctx.get('sessions').using()` for session rename. Failures surface as inline notices.
 - **Reuse** — icons, `StateDot`, `Menu`, `Tooltip`, `Button`, `Modal`, `writeClipboard`, and
   `relativeTime` come from the shared `ui-primitives` module; the plugin draws no artwork.
+- **File manager** — project menus call `remote.session.openWorkspacePath({ path })`
+  so the Host reveals the project directory in the OS file manager (entry hidden for Ungrouped).
 - **Dialogs** — registered into the root `shell.overlay` list so they render above the frame
   instead of being clipped by the sidebar; the sidebar talks to them through one bare observable
   passed via a registration `inject` face.
@@ -274,7 +278,7 @@ keep the browser half dependency-free and platform-table-only, never declare chi
 - all four section menus, project menus (incl. per-project sort reset), context menus from mouse
   and keyboard, hover previews, drag insertions before/after, blank-row and filtered-drag guards;
 - Host action dispatch (pin, archive incl. stop-and-archive refusal, unarchive, fork, copy ID,
-  workspace add/rename/delete, session rename, order write) and failure notices;
+  workspace add/rename/delete, session rename, order write, project folder open) and failure notices;
 - static hygiene: no DOM `title` tooltips, no literal colors, no menu-open hover background.
 
 The suite drives the real component functions through a miniature React/hooks runtime and a

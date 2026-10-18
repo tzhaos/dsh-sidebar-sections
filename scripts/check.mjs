@@ -442,6 +442,14 @@ function applyPlugin() {
       pickDirectory: () => { calls.push(['pickDirectory']); return Promise.resolve('D:\\new') },
       __archiveHandler: () => Promise.resolve(),
     },
+    remote: {
+      session: {
+        openWorkspacePath: (request) => {
+          calls.push(['openWorkspacePath', request])
+          return Promise.resolve({ ok: true, value: {} })
+        },
+      },
+    },
     workspaces: {
       create: (input) => { calls.push(['createWorkspace', input.path]); return Promise.resolve({ workspaceId: 'w3' }) },
       rename: (id, title) => { calls.push(['renameWorkspace', id, title]); return Promise.resolve({}) },
@@ -741,7 +749,7 @@ await check('factory returns a Cordis plugin with the required services', () => 
   const reactRuntime = createFakeReact()
   const { registration, plugin } = loadClientModule(reactRuntime, createFakePrimitives(reactRuntime), createFakeWindow())
   assertEqual(registration.id, manifest.name, 'module id')
-  assertEqual(plugin.inject.slice().sort(), ['locale', 'sessions', 'slots', 'uiWorkspace', 'workspaces'], 'inject list')
+  assertEqual(plugin.inject.slice().sort(), ['locale', 'remote', 'remote.session', 'sessions', 'slots', 'uiWorkspace', 'workspaces'], 'inject list')
   assert(typeof plugin.apply === 'function', 'apply')
 })
 
@@ -938,12 +946,13 @@ await check('project menu opens rename/delete dialog requests', () => {
   dispatch(harness, findButton(findProject(), t, 'actions.workspace.aria', { name: 'Alpha project' }), 'onClick', syntheticEvent())
   const items = findAll(findOne(harness.tree, (element) => element.props?.role === 'menu'), (element) => element.type === 'button')
   assertEqual(items.map(textOf), [
-    t('sort.default'), t('sort.manual'), t('sort.updated'), t('rename'), t('delete.workspace'),
+    t('sort.default'), t('sort.manual'), t('sort.updated'), t('menu.openInFileManager'),
+    t('rename'), t('delete.workspace'),
   ], 'project menu items')
-  items[3].props.onClick()
+  items[4].props.onClick()
   assertEqual(request.getSnapshot().kind, 'rename', 'workspace rename request')
   const reopened = findAll(findOne(harness.tree, (element) => element.props?.role === 'menu'), (element) => element.type === 'button')
-  reopened[4].props.onClick()
+  reopened[5].props.onClick()
   assertEqual(request.getSnapshot().kind, 'delete', 'workspace delete request')
 })
 
@@ -991,8 +1000,8 @@ await check('archived rows right-click to an unarchive action without pin', () =
   assertEqual(calls.at(-1), ['unarchiveSession', 's4'], 'context menu unarchives')
 })
 
-await check('right-clicking a project row opens its sort/rename menu', () => {
-  const { harness, t, browserWindow, registrations } = scenario()
+await check('right-clicking a project row opens its sort/rename/file-manager menu', async () => {
+  const { harness, t, browserWindow, registrations, calls } = scenario()
   dispatch(harness, harness.tree, 'onContextMenu', syntheticEvent({
     target: contextTarget('project', { workspace: 'w1' }),
     clientX: 40,
@@ -1001,7 +1010,8 @@ await check('right-clicking a project row opens its sort/rename menu', () => {
   const menu = findOne(harness.tree, (element) => element.props?.role === 'menu')
   const items = findAll(menu, (element) => element.type === 'button')
   assertEqual(items.map(textOf), [
-    t('sort.default'), t('sort.manual'), t('sort.updated'), t('rename'), t('delete.workspace'),
+    t('sort.default'), t('sort.manual'), t('sort.updated'), t('menu.openInFileManager'),
+    t('rename'), t('delete.workspace'),
   ], 'project context menu items')
   items[1].props.onClick()
   const stored = JSON.parse(browserWindow.localStorage.getItem('dsh.sidebarSections.projectSorts') ?? '{}')
@@ -1013,9 +1023,19 @@ await check('right-clicking a project row opens its sort/rename menu', () => {
   }))
   const reopened = findAll(findOne(harness.tree, (element) => element.props?.role === 'menu'),
     (element) => element.type === 'button')
-  reopened[3].props.onClick()
+  reopened[4].props.onClick()
   const overlay = registrations.find((entry) => entry.options.name === 'shell.overlay')
   assertEqual(overlay.options.inject().hooks.request.getSnapshot().kind, 'rename', 'context menu opens rename dialog')
+  dispatch(harness, harness.tree, 'onContextMenu', syntheticEvent({
+    target: contextTarget('project', { workspace: 'w1' }),
+    clientX: 40,
+    clientY: 80,
+  }))
+  const launchItems = findAll(findOne(harness.tree, (element) => element.props?.role === 'menu'),
+    (element) => element.type === 'button')
+  launchItems[3].props.onClick()
+  await settle()
+  assertEqual(calls.at(-1), ['openWorkspacePath', { path: 'D:\\alpha' }], 'file manager launch dispatched')
 })
 
 await check('project sort override can be reset to the section order', () => {

@@ -153,6 +153,7 @@ window.__ModuleLoader__.load({
       'menu.archiveSession': '归档会话',
       'menu.unarchiveSession': '取消归档',
       'menu.sessionId': '复制 Session ID',
+      'menu.openInFileManager': '在文件管理器中打开',
       'actions.workspace.aria': '工作区“{name}”的操作',
       'actions.session.aria': '会话“{name}”的操作',
       'actions.archive': '归档会话',
@@ -260,6 +261,7 @@ window.__ModuleLoader__.load({
       'menu.archiveSession': 'Archive session',
       'menu.unarchiveSession': 'Unarchive session',
       'menu.sessionId': 'Copy Session ID',
+      'menu.openInFileManager': 'Open in File Manager',
       'actions.workspace.aria': 'Workspace actions for {name}',
       'actions.session.aria': 'Session actions for {name}',
       'actions.archive': 'Archive session',
@@ -1428,20 +1430,32 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Project-row menu entries: per-project sort override plus Workspace actions.
+     * Project-row menu entries: per-project sort override, file-manager launch and
+     * Workspace actions.
+     * @param {object} group - project group (path enables the launch row).
      * @param {Function} t - translate seat.
      * @returns {object[]} menu entries.
      */
-    function projectMenuEntries(t) {
-      return [
+    function projectMenuEntries(group, t) {
+      const items = [
         { type: 'label', id: 'project-sort', text: t('sort.label') },
         { id: 'sort-default', label: t('sort.default') },
         { id: 'sort-manual', label: t('sort.manual') },
         { id: 'sort-updated', label: t('sort.updated') },
         { type: 'separator', id: 'project-separator' },
+      ]
+      if (group.path !== undefined) {
+        items.push({
+          id: 'open-file-manager',
+          label: t('menu.openInFileManager'),
+          icon: h(IconFolderOpenRegular, { size: 14 }),
+        })
+      }
+      items.push(
         { id: 'rename', label: t('rename'), icon: h(IconEditOutlineRegular, { size: 14 }) },
         { id: 'delete', label: t('delete.workspace'), icon: h(IconTrashOutlineRegular, { size: 14 }), danger: true },
-      ]
+      )
+      return items
     }
 
     /**
@@ -1557,7 +1571,7 @@ window.__ModuleLoader__.load({
      */
     function ProjectGroup({
       group, expanded, onToggle, onNewSession, onWorkspaceMenu, rowDrag,
-      sortMode, sortOverride, onSort, onContextMenuKey, renderSessionRow, t,
+      sortMode, sortOverride, onSort, onContextMenuKey, renderSessionRow, onOpenInFileManager, t,
     }) {
       const [menuOpen, setMenuOpen] = useState(false)
       const groupLabel = t('actions.workspace.aria', { name: group.label })
@@ -1605,10 +1619,11 @@ window.__ModuleLoader__.load({
             'aria-label': groupLabel,
             onClick: () => { setMenuOpen((open) => !open) },
           }, h(IconEllipsisOutlineRegular, { size: 16 })),
-          items: projectMenuEntries(t),
+          items: projectMenuEntries(group, t),
           selectedIds: projectSortSelection(sortOverride, sortMode),
           onSelect: (id) => {
             setMenuOpen(false)
+            if (id === 'open-file-manager') { onOpenInFileManager(); return }
             if (id === 'sort-default') { onSort('default'); return }
             if (id === 'sort-manual' || id === 'sort-updated') {
               onSort(id === 'sort-manual' ? 'manual' : 'updated')
@@ -2333,6 +2348,7 @@ window.__ModuleLoader__.load({
           },
           onContextMenuKey: (event) => openContextMenuForKey(event, 'project', { workspaceKey: projectOrderKey(group.key) }),
           renderSessionRow,
+          onOpenInFileManager: () => { invoke(() => actions.openInFileManager(group.path), report, 'open in file manager') },
           rowDrag: rowDrag('project:' + projectOrderKey(group.key), group.sort === 'manual', group.workspaceId),
           t,
         }))
@@ -2524,9 +2540,13 @@ window.__ModuleLoader__.load({
         } else if (contextMenu.kind === 'project') {
           const group = projectGroups.find((candidate) => projectOrderKey(candidate.key) === contextMenu.workspaceKey)
           if (group === undefined) return null
-          items.push(...projectMenuEntries(t))
+          items.push(...projectMenuEntries(group, t))
           selectedIds.push(...projectSortSelection(group.sortOverride, group.sort))
           onSelect = (id) => {
+            if (id === 'open-file-manager') {
+              invoke(() => actions.openInFileManager(group.path), report, 'open in file manager')
+              return
+            }
             if (id === 'sort-default') { setProjectSort(group.key, 'default'); return }
             if (id === 'sort-manual' || id === 'sort-updated') {
               setProjectSort(group.key, id === 'sort-manual' ? 'manual' : 'updated')
@@ -2803,6 +2823,7 @@ window.__ModuleLoader__.load({
       const uiWorkspace = ctx.get('uiWorkspace')
       const workspaces = ctx.get('workspaces')
       const sessions = ctx.get('sessions')
+      const remote = ctx.get('remote')
       ctx.effect(
         () => ctx.locale.register(NS, { zh, en }),
         'sidebar-sections: dictionaries',
@@ -2847,6 +2868,12 @@ window.__ModuleLoader__.load({
         ),
         forkSession: (sessionId) => uiWorkspace.forkSession(sessionId, undefined, { allowMigration: false }),
         copySessionId: (sessionId) => writeClipboard(sessionId),
+        openInFileManager: async (path) => {
+          const result = await remote.session.openWorkspacePath({ path })
+          if (result !== null && typeof result === 'object' && result.ok === false) {
+            throw new Error(result.error?.message ?? result.error?.code ?? 'open in file manager failed')
+          }
+        },
         addWorkspace: async () => {
           const path = await uiWorkspace.pickDirectory()
           if (path === null) return
@@ -2895,7 +2922,7 @@ window.__ModuleLoader__.load({
 
     return {
       /** Services this Client plugin waits for before applying. */
-      inject: ['slots', 'locale', 'uiWorkspace', 'workspaces', 'sessions'],
+      inject: ['slots', 'locale', 'uiWorkspace', 'workspaces', 'sessions', 'remote', 'remote.session'],
       apply,
     }
   },

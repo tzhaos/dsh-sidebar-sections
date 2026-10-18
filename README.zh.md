@@ -6,7 +6,7 @@
 变成 **置顶 / 项目 / 最近 / 归档** 四个分区的对话浏览器，带分区菜单、拖拽排序、右键菜单与悬停预览。
 
 ![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.2.1--rc.2-4D6BFE)
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
+![Version](https://img.shields.io/badge/version-2.1.0-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
 ![Checks](https://img.shields.io/badge/checks-56-brightgreen)
@@ -149,9 +149,10 @@ junction；使用 Plugin Manager 时对应 `remove_bundle`。
 3. **排序与分组**：打开分区 `⋯` 菜单。置顶/归档只有排序；项目/最近提供分组与排序；每个项目行
    的 `⋯` 菜单额外提供项目级排序覆盖。
 4. **手动排序**：切到手动排序后拖拽行；项目级手动排序在分区仍是「最近更新」时也生效。
-5. **查找**：在搜索行输入；匹配分组自动展开；`Esc` 关闭。
-6. **不用鼠标打开菜单**：聚焦行/项目/分区标题后按 `Shift+F10`。
-7. **悬停预览**：在对话行或项目行停留约 400ms，卡片出现；移出后消失。
+5. **打开项目目录**：右键项目行（或点 `⋯`）选择**在文件管理器中打开**。
+6. **查找**：在搜索行输入；匹配分组自动展开；`Esc` 关闭。
+7. **不用鼠标打开菜单**：聚焦行/项目/分区标题后按 `Shift+F10`。
+8. **悬停预览**：在对话行或项目行停留约 400ms，卡片出现；移出后消失。
 
 ## 实现原理
 
@@ -183,6 +184,8 @@ ui-sidebar slot
   `ctx.get('sessions').using()`（会话重命名）。失败以行内提示呈现。
 - **复用**：图标、`StateDot`、`Menu`、`Tooltip`、`Button`、`Modal`、`writeClipboard`、
   `relativeTime` 全部来自共享的 `ui-primitives` 模块；插件不绘制图形。
+- **文件管理器**：项目菜单通过 `remote.session.openWorkspacePath({ path })`
+  让宿主在系统文件管理器中定位项目目录（未分组没有路径，不显示该项）。
 - **对话框**：注册到 root `shell.overlay`，渲染在整个 frame 之上，不会被侧边栏裁剪；侧边栏与
   overlay 之间通过注册 `inject` 面上的一个裸 observable 通信。
 - **模块格式**：classic script 调用
@@ -251,7 +254,7 @@ dsh-sidebar-sections/
 - 四个分区菜单、项目菜单（含项目级排序重置）、鼠标/键盘右键菜单、悬停预览、拖拽前/后落点、
   空白行与筛选状态的拖拽保护；
 - 宿主动作派发（置顶、归档含 stop-and-archive 拒绝、取消归档、分叉、复制 ID、工作区
-  添加/重命名/删除、会话重命名、顺序写回）与失败提示；
+  添加/重命名/删除、会话重命名、顺序写回、打开项目目录）与失败提示；
 - 静态卫生：无 DOM `title` 原生 tooltip、无字面量颜色、菜单打开不绘制 hover 背景。
 
 套件通过迷你 React/hooks 运行时与 host-shaped 的 `ui-primitives` fake 驱动真实组件函数，无需

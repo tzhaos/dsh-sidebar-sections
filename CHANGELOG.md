@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-10-18
+
+Open a project directory in the OS file manager.
+
+### Added
+
+- Project row menus (both the `⋯` button and the right-click menu) gain **Open in File Manager**
+  for real Workspace groups. The action calls the Host's
+  `remote.session.openWorkspacePath({ path })` so the project directory opens directly; Ungrouped
+  (no path) hides the entry.
+- The client bundle injects `remote` / `remote.session` and the api gateway/remotes/session-controller
+  client bundles so the Host call is ready before the browser mounts.
+- Test: the project context menu dispatches the reveal request with the project path.
+
+### Changed
+
+- Project menu item order: sort options → Open in File Manager → rename/delete.
+
 ## [2.0.0] - 2026-10-18
 
 Open-source readiness pass. No user-visible behaviour changes.

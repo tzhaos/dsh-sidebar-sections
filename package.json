@@ -1,6 +1,6 @@
 {
   "name": "dsh-sidebar-sections",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "Replaces the DSH sidebar conversation browser with Pinned / Projects / Recent / Archived sections, per-section and per-project sorting, drag ordering, context menus and hover previews.",
   "type": "module",
@@ -38,7 +38,10 @@
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-session",
         "@deepseek-ai/dsh-client-ui-sidebar",
-        "@deepseek-ai/dsh-client-ui-workspace"
+        "@deepseek-ai/dsh-client-ui-workspace",
+        "@deepseek-ai/dsh-api-gateway",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-session-controller"
       ]
     }
   },
