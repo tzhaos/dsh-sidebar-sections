@@ -112,6 +112,11 @@ The Plugin Manager writes the profile manifest, installs/link the bundle, select
 recomposes the configuration. Installing into a running profile can activate through HMR; no
 restart is required when it does.
 
+> Notes: `install_bundle` is only available in a Creator-preset session, needs Full access (or
+> approval for the call), and `target` must be an absolute path. If the current profile already
+> has the same package installed (for example from an earlier manual link), it answers
+> `already-installed`; run `remove_bundle` first, or keep using the manual install for development.
+
 ### Manual install (development)
 
 1. Make the package resolvable from the profile:

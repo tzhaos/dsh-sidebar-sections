@@ -34,7 +34,9 @@ git clone https://github.com/tzhaos/dsh-sidebar-sections.git
 plugin_manager(action="install_bundle", target="<插件目录的绝对路径>")
 ```
 
-然后在 DSH 的插件设置里启用即可。需要 DSH **0.2.1-rc.2** 左右的新版本；客户端 API 目前还是 pre-stable，后续 DSH 如果改接口，插件可能需要跟着适配。
+在启用 Creator 预设的 DSH 会话里执行，`target` 填插件的绝对路径。如果当前 profile 之前已经装过同名插件，会提示 `already-installed`，先 `remove_bundle` 再装即可。
+
+然后在 DSH 的插件设置里启用。需要 DSH **0.2.1-rc.2** 左右的新版本；客户端 API 目前还是 pre-stable，后续 DSH 如果改接口，插件可能需要跟着适配。
 
 目前已知的小限制：拖拽只在同一个列表/项目内生效，搜索只匹配已加载的标题、项目名和目录名，不是消息内容搜索。其他问题欢迎在评论区反馈，或者直接去 GitHub 提 issue。
 

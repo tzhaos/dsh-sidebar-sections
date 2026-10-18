@@ -101,6 +101,10 @@ plugin_manager(action="install_bundle", target="<本目录的绝对路径>")
 Plugin Manager 会写入 profile 清单、安装/链接 bundle、选中并重组配置。安装进运行中的 profile 可
 通过 HMR 直接生效，无需重启。
 
+> 注意：`install_bundle` 只在 Creator 预设的会话中可用，每次调用需要 Full Access 或审批；`target`
+> 必须是绝对路径。如果当前 profile 已经装过同名插件（例如之前手工 link 过），会返回
+> `already-installed`，请先 `remove_bundle` 再安装，或继续使用下面的手工安装方式开发。
+
 ### 手工安装（开发用）
 
 1. 让包能从 profile 目录解析到：
