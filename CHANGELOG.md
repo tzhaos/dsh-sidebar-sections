@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-10-18
+
+Hover previews are now a surface you can move into, and the README ships a real screenshot.
+
+### Changed
+
+- The conversation/project preview card is interactive (`pointer-events: auto`): leaving the row
+  no longer hides it immediately. A 180 ms grace period covers the gap, and the card's own
+  `mouseenter`/`mouseleave` keep it open while hovered; it closes once the pointer has left
+  both the row and the card, including when it leaves the app window entirely.
+- `README.md` / `README.zh.md`: replaced the vector layout diagram with a real application
+  screenshot (`docs/screenshot.png`), and documented the new hover travel behavior.
+
+### Verified
+
+- `node scripts/check.mjs`: 57 checks green (new: hover card stays open while hovered and clears
+  after both surfaces are left).
+
 ## [2.1.0] - 2026-10-18
 
 Open a project directory in the OS file manager.

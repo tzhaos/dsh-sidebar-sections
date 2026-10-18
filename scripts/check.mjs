@@ -1474,10 +1474,41 @@ await check('conversation hover card shows title, project and time, then clears'
   assert(textOf(card).includes('Alpha talk'), 'title in hover card')
   assert(textOf(card).includes('Alpha project'), 'project in hover card')
   dispatch(harness, harness.tree, 'onMouseOut', syntheticEvent({ target: hoverTarget('row', dataset), relatedTarget: null }))
+  browserWindow.__runTimers()
   harness.rerender()
   const remaining = findAll(harness.tree, (element) => element.props?.className === 'dshss-hoverCard')
 
-  assertEqual(remaining.length, 0, 'hover card cleared')
+  assertEqual(remaining.length, 0, 'hover card cleared after leaving both surfaces')
+})
+
+await check('hover card stays open while the pointer travels into it', () => {
+  const { harness, t, browserWindow } = scenario()
+  const row = findAllSessionRows(harness.tree, 'Alpha talk')[0]
+  const dataset = {
+    session: row.props['data-session'],
+    title: row.props['data-title'],
+    project: row.props['data-project'],
+    time: row.props['data-time'],
+  }
+  dispatch(harness, harness.tree, 'onMouseOver', syntheticEvent({ target: hoverTarget('row', dataset) }))
+  browserWindow.__runTimers()
+  harness.rerender()
+  let card = findOne(harness.tree, (element) => element.props?.className === 'dshss-hoverCard')
+  assert(card, 'card opened after the dwell')
+  // Leaving the row schedules a close; entering the card cancels it.
+  dispatch(harness, harness.tree, 'onMouseOut', syntheticEvent({ target: hoverTarget('row', dataset), relatedTarget: null }))
+  dispatch(harness, card, 'onMouseEnter', syntheticEvent())
+  browserWindow.__runTimers()
+  harness.rerender()
+  card = findOne(harness.tree, (element) => element.props?.className === 'dshss-hoverCard')
+  assert(card, 'card stays open while hovered')
+  assert(textOf(card).includes('Alpha talk'), 'hovered card keeps its content')
+  // Leaving the card now closes it after the grace period.
+  dispatch(harness, card, 'onMouseLeave', syntheticEvent({ relatedTarget: null }))
+  browserWindow.__runTimers()
+  harness.rerender()
+  assertEqual(findAll(harness.tree, (element) => element.props?.className === 'dshss-hoverCard').length, 0,
+    'card closes after leaving the card')
 })
 
 await check('project hover card shows name, visible count and path', () => {

@@ -6,12 +6,12 @@
 变成 **置顶 / 项目 / 最近 / 归档** 四个分区的对话浏览器，带分区菜单、拖拽排序、右键菜单与悬停预览。
 
 ![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.2.1--rc.2-4D6BFE)
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.0-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
-![Checks](https://img.shields.io/badge/checks-56-brightgreen)
+![Checks](https://img.shields.io/badge/checks-57-brightgreen)
 
-![侧边栏布局](docs/layout.svg)
+![侧边栏分区与项目悬停预览](docs/screenshot.png)
 
 ## 目录
 
@@ -59,7 +59,8 @@
 - 悬停或键盘聚焦出现**归档/取消归档**、**置顶/取消置顶**与 **⋯** 行菜单（置顶/取消置顶、重命名、
   分叉、归档/取消归档、复制 Session ID）。
 - **右键**或按 `Shift+F10` / Context Menu 键，在鼠标位置或聚焦元素处打开同样的菜单。
-- 悬停约 400ms 显示预览卡片：标题、所属项目与时间。
+- 悬停约 400ms 显示预览卡片：标题、所属项目与时间。鼠标可以顺着移动到卡片上；只有同时离开
+  行与卡片后卡片才消失。
 - 归档行只提供**取消归档**，且不可打开。
 
 ### 排序
@@ -245,7 +246,7 @@ dsh-sidebar-sections/
 
 ## 测试
 
-`scripts/check.mjs` 是零依赖 Node 套件（56 项），覆盖：
+`scripts/check.mjs` 是零依赖 Node 套件（57 项），覆盖：
 
 - 包清单、exports、`files`、bundle patch、插件管理器显示元数据、图标、仅平台模块，以及
   「禁止手抄 SVG 路径」的复用规则；

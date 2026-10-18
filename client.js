@@ -1063,7 +1063,7 @@ window.__ModuleLoader__.load({
   border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-layer-1);
   box-shadow: var(--dsw-shadow-lv3);
-  pointer-events: none;
+  pointer-events: auto;
 }
 .dshss-hoverTop {
   display: flex;
@@ -1812,6 +1812,10 @@ window.__ModuleLoader__.load({
       const inputRef = useRef(null)
       const scrollRef = useRef(null)
       const hoverTimerRef = useRef(null)
+      const hoverCardRef = useRef(null)
+      const hoverClearTimerRef = useRef(null)
+      /** Grace period for travelling from a row into its preview card. */
+      const HOVER_LINGER_MS = 180
 
       const loading = workspaceSnapshot.phase !== 'ready' || list.phase !== 'ready'
       const sections = useMemo(() => deriveSections({
@@ -1843,6 +1847,7 @@ window.__ModuleLoader__.load({
 
       useEffect(() => () => {
         if (hoverTimerRef.current !== null) window.clearTimeout(hoverTimerRef.current)
+        if (hoverClearTimerRef.current !== null) window.clearTimeout(hoverClearTimerRef.current)
       }, [])
 
       /** Show one transient inline notice. */
@@ -1866,9 +1871,35 @@ window.__ModuleLoader__.load({
           hoverTimerRef.current = null
         }
       }
-      /** Start the row-hover dwell that opens the project preview card. */
+      /** Cancel an in-flight close of the preview card. */
+      const cancelHoverClear = () => {
+        if (hoverClearTimerRef.current !== null) {
+          window.clearTimeout(hoverClearTimerRef.current)
+          hoverClearTimerRef.current = null
+        }
+      }
+      /**
+       * Close the preview after a short grace period. The delay lets the pointer
+       * cross the gap from a row into the card without the card vanishing.
+       */
+      const scheduleHoverClear = () => {
+        cancelHoverClear()
+        hoverClearTimerRef.current = window.setTimeout(() => {
+          hoverClearTimerRef.current = null
+          setHoverPreview(null)
+        }, HOVER_LINGER_MS)
+      }
+      /** Whether a pointer target is inside the rendered preview card. */
+      const insideHoverCard = (target) => {
+        const card = hoverCardRef.current
+        if (target === null || target === undefined) return false
+        if (card === null || card === undefined) return false
+        return typeof card.contains === 'function' && card.contains(target)
+      }
+      /** Start the row-hover dwell that opens the preview card. */
       const hoverRow = (event) => {
         if (dragState !== null || contextMenu !== null) return
+        cancelHoverClear()
         const actions = event.target?.closest?.('.dshss-rowActions')
         if (actions !== null && actions !== undefined) return
         const projectRow = event.target?.closest?.('.dshss-projectRow[data-workspace]')
@@ -1905,14 +1936,44 @@ window.__ModuleLoader__.load({
           })
         }, 420)
       }
-      /** Close the preview when the pointer leaves the row (or its actions). */
+      /** Leave the row: head to the card, and the card takes over the hover. */
       const leaveRow = (event) => {
         const row = event.target?.closest?.('.dshss-row, .dshss-projectRow')
         if (row === null || row === undefined) return
         if (event.relatedTarget !== null && row.contains(event.relatedTarget)) return
         cancelHoverTimer()
-        setHoverPreview(null)
+        if (insideHoverCard(event.relatedTarget)) {
+          cancelHoverClear()
+          return
+        }
+        scheduleHoverClear()
       }
+      /** The pointer rests on the card: keep it open and cancel pending closes. */
+      const enterHoverCard = () => {
+        cancelHoverTimer()
+        cancelHoverClear()
+      }
+      /** Leaving the card closes it after the same grace period as the row. */
+      const leaveHoverCard = (event) => {
+        if (insideHoverCard(event.relatedTarget)) return
+        scheduleHoverClear()
+      }
+      // A pointer that leaves the whole app window must not strand the preview.
+      useEffect(() => {
+        if (typeof window.addEventListener !== 'function') return undefined
+        const closePreview = () => {
+          cancelHoverTimer()
+          cancelHoverClear()
+          setHoverPreview(null)
+        }
+        window.addEventListener('blur', closePreview)
+        const root = typeof document === 'undefined' ? undefined : document.documentElement
+        if (root !== undefined && root !== null) root.addEventListener('mouseleave', closePreview)
+        return () => {
+          window.removeEventListener('blur', closePreview)
+          if (root !== undefined && root !== null) root.removeEventListener('mouseleave', closePreview)
+        }
+      }, [])
 
       /** Open a conversation; archived rows explain why they stay closed. */
       const openNode = (node) => {
@@ -2623,6 +2684,9 @@ window.__ModuleLoader__.load({
           h('span', {
             className: 'dshss-hoverCard',
             role: 'tooltip',
+            ref: hoverCardRef,
+            onMouseEnter: enterHoverCard,
+            onMouseLeave: leaveHoverCard,
             style: { left: Math.max(8, left) + 'px', top: Math.max(8, hoverPreview.rect.top - 4) + 'px' },
           },
           h('span', { className: 'dshss-hoverTop' },

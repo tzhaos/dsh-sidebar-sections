@@ -7,12 +7,12 @@ sidebar into a **Pinned / Projects / Recent / Archived** conversation browser �
 menus, drag ordering, context menus and hover previews.
 
 ![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.2.1--rc.2-4D6BFE)
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.0-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
-![Checks](https://img.shields.io/badge/checks-56-brightgreen)
+![Checks](https://img.shields.io/badge/checks-57-brightgreen)
 
-![Sidebar layout](docs/layout.svg)
+![Sidebar sections with the project hover preview](docs/screenshot.png)
 
 ## Table of contents
 
@@ -65,7 +65,8 @@ always the rightmost action so the menus line up across sections.
   menu (pin/unpin, rename, fork, archive/unarchive, copy Session ID).
 - **Right-click** or press the Context Menu key / `Shift+F10` for the same menu at the pointer or
   focused row.
-- Hovering a row for ~400 ms shows a preview card with the title, owning project and time.
+- Hovering a row for ~400 ms shows a preview card with the title, owning project and time. The
+  pointer can travel into the card; the card closes only after leaving both the row and the card.
 - Archived rows expose **Unarchive** instead of pin/archive and cannot be opened.
 
 ### Ordering
@@ -246,7 +247,7 @@ dsh-sidebar-sections/
 ├── client.js                 # browser half: plain JS, no build step
 ├── icon.svg                  # plugin-manager icon
 ├── locale/                   # plugin-manager title/description (en, zh)
-├── docs/layout.svg           # README layout diagram
+├── docs/screenshot.png       # README screenshot
 ├── scripts/check.mjs         # zero-dependency verification suite
 ├── README.md / README.zh.md
 ├── CHANGELOG.md
@@ -267,7 +268,7 @@ keep the browser half dependency-free and platform-table-only, never declare chi
 
 ## Testing
 
-`scripts/check.mjs` is a zero-dependency Node suite (56 checks) covering:
+`scripts/check.mjs` is a zero-dependency Node suite (57 checks) covering:
 
 - package manifest, exports, `files`, bundle patch, localized display metadata, icon bounds, and
   platform-only `require`s (plus the “no hand-copied SVG paths” reuse rule);
