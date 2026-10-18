@@ -4,6 +4,33 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-10-18
+
+Right-click menus and per-project sorting.
+
+### Added
+
+- **Right-click context menus**: right-click a conversation row, a project row, or any section
+  heading (Pinned / Projects / Recent / Archived) to open the same menu as its `⋯` button,
+  positioned at the pointer. The menu dispatches the same actions as the button menu.
+- **Per-project sorting**: every project row's `⋯` (and right-click) menu now carries its own
+  **Sort chats by** override (Manual order / Last updated), stored in
+  `dsh.sidebarSections.projectSorts`. A project in manual order can be drag-reordered on its own
+  even when the section-wide sort is Last updated, and real Workspace groups dispatch
+  `workspaces.insertSessionBefore` to persist the Host order.
+
+### Changed
+
+- The Projects section menu keeps its section-wide grouping/sort; per-project overrides take
+  precedence for that project.
+- Menu labels use the existing localization keys; no new locale keys were required.
+
+### Verified
+
+- `node scripts/check.mjs`: 49 checks green (right-click row/project/section menus dispatch their
+  actions, per-project sort override persists, per-project manual drag reorders and writes the
+  Host order).
+
 ## [1.5.0] - 2026-10-18
 
 True manual ordering and menu/icon cleanup.

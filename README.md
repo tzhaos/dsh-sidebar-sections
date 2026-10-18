@@ -58,8 +58,9 @@ their direct action.
 | Area | Behavior |
 |---|---|
 | Pinned | Host pin set, most recently pinned first. Hovering or keyboard-focusing a row reveals **Unpin**, and a resting 📌 marks pinned rows. Rows keep the shipped conversation UI (status, title, time, actions). The section collapses from its right-side chevron; its `⋯` menu offers only the sort order (**Manual order** / **Last updated**). |
-| Projects | One group per registered Workspace, in Host order, with unpinned and unarchived conversations nested inside. Groups collapse (browser-local, remembered) and default to expanded. Hovering a project reveals **New session** and a **⋯** menu with **Rename workspace** / **Delete workspace**. The folder icon on a project row stays a folder (open/closed); clicking the row itself toggles it. The section header carries `＋` (add workspace) and, rightmost, `⋯`: **Group chats by** (By project / In one list) and **Sort chats by** (Manual order / Last updated). |
+| Projects | One group per registered Workspace, in Host order, with unpinned and unarchived conversations nested inside. Groups collapse (browser-local, remembered) and default to expanded. Hovering a project reveals **New session** and a **⋯** menu with **Rename workspace** / **Delete workspace**. The folder icon on a project row stays a folder (open/closed); clicking the row itself toggles it. The section header carries `＋` (add workspace) and, rightmost, `⋯`: **Group chats by** (By project / In one list) and **Sort chats by** (Manual order / Last updated). Each project row's `⋯` (or right-click) menu additionally carries its own **Sort chats by** override, so a single project can use manual/last-updated independently of the section. |
 | Recent | Unpinned conversations across all projects, newest activity first. Eight rows initially, with **Show more** in steps of twenty. Rows show title and recency only. The section header carries `✎` (new session in the Host default workspace) and, rightmost, `⋯`: the same **Group chats by** / **Sort chats by** choices (By project / In one list, Manual order / Last updated). |
+| Context menus | Right-click a conversation row, a project row, or any section heading to open the same menu that its `⋯` button opens (row actions / project sort + workspace actions / section grouping and sort). |
 | Every conversation | Hovering or keyboard-focusing a row reveals **archive/unarchive**, **pin/unpin**, and the **⋯** row menu: pin/unpin, rename session, fork session, archive/unarchive, copy Session ID. Hovering the row for a moment opens a preview card with the conversation title, its owning project, and the time. |
 | Search row | A full-width filter control on its own row above the sections (conversation title or project name; `Esc` clears and collapses it). |
 | Section headers | Larger, bold section titles; the disclosure chevron sits to the right of the title and rotates down/right as the section expands/collapses. Clicking (or `Enter`/`Space` on) the header toggles it, the state is remembered browser-locally, and any active filter expands the sections so results stay visible. The `⋯` button is always the rightmost action so the ellipses line up across sections. |
@@ -151,11 +152,15 @@ is the `remove_bundle` operation.
 - **Sort and group**: each section's `⋯` menu carries its own choices. Pinned and Archived sort by
   **Manual order** (Host saved/pin order) or **Last updated**. Projects and Recent additionally
   group **By project** or **In one list**; all choices are remembered browser-locally.
-- **Manual ordering by drag**: in any section set to **Manual order**, rows become draggable —
-  drag a row onto another row's upper/lower half to insert it before/after; a line marks the drop
-  position. The resulting order is stored browser-locally (`dsh.sidebarSections.manualOrder`), and
-  real Workspace groups also persist it to the Host through `workspaces.insertSessionBefore`.
-  Blank draft rows and cross-group moves are not draggable.
+- **Manual ordering by drag**: in any section set to **Manual order** (or any single project whose
+  row menu is set to Manual order), rows become draggable — drag a row onto another row's
+  upper/lower half to insert it before/after; a line marks the drop position. The resulting order
+  is stored browser-locally (`dsh.sidebarSections.manualOrder`), and real Workspace groups also
+  persist it to the Host through `workspaces.insertSessionBefore`. Project sort overrides are
+  stored in `dsh.sidebarSections.projectSorts`. Blank draft rows and cross-group moves are not
+  draggable.
+- **Right-click menus**: right-click any row, project row, or section heading to open the same
+  actions menu as its `⋯` button.
 - **Section shortcuts**: `＋` next to Projects adds a workspace through the Host directory picker;
   `✎` next to Recent starts a session in the Host's default workspace (its localized name).
 - **Peek at a row**: hover a conversation row to see its title, owning project, and time in a
@@ -226,7 +231,7 @@ and re-check the live UI; a changed slot contract may require updating this plug
 
 ## 6. Verification
 
-`scripts/check.mjs` is a zero-dependency suite (45 checks) that runs with plain Node:
+`scripts/check.mjs` is a zero-dependency suite (49 checks) that runs with plain Node:
 
 ```sh
 node scripts/check.mjs
@@ -254,6 +259,10 @@ It validates:
 - manual ordering: manual-sort rows are draggable, a drop reorders and persists the manual order in
   browser storage, updated-sort rows are static, and project rows keep their folder icon instead of
   a hover chevron;
+- per-project sorting: a project's own sort override reorders just that group and persists in
+  browser storage, with the Host `insertSessionBefore` write dispatched for real Workspace groups;
+- right-click context menus: conversation rows, project rows, and section headings each open their
+  matching menus and dispatch the same actions;
 - rendered rows/buttons carry no native `title` tooltips;
 - rows expose their owning project for the hover preview card;
 - interaction dispatch: pin/unpin, archive (including the stop-and-archive refusal path),

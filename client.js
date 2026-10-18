@@ -91,6 +91,7 @@ window.__ModuleLoader__.load({
     const SECTION_COLLAPSED_KEY = 'dsh.sidebarSections.collapsedSections'
     const SECTION_VIEW_KEY = 'dsh.sidebarSections.sectionViews'
     const MANUAL_ORDER_KEY = 'dsh.sidebarSections.manualOrder'
+    const PROJECT_SORTS_KEY = 'dsh.sidebarSections.projectSorts'
     /** Notice lifetime before it dismisses itself. */
     const NOTICE_TIMEOUT_MS = 6000
     /** Relative-time refresh cadence. */
@@ -674,6 +675,39 @@ window.__ModuleLoader__.load({
         window.localStorage.setItem(SECTION_VIEW_KEY, JSON.stringify(views))
       } catch (error) {
         console.warn('sidebar-sections: section views not persisted', error)
+      }
+    }
+
+    /**
+     * Read the browser-local per-project sort overrides.
+     * @returns {Record<string, 'manual'|'updated'>} workspace key -> sort mode.
+     */
+    function readProjectSorts() {
+      try {
+        const raw = window.localStorage.getItem(PROJECT_SORTS_KEY)
+        if (raw === null) return {}
+        const parsed = JSON.parse(raw)
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+        const sorts = {}
+        for (const [key, value] of Object.entries(parsed)) {
+          if (value === 'manual' || value === 'updated') sorts[key] = value
+        }
+        return sorts
+      } catch (error) {
+        console.warn('sidebar-sections: unreadable project sort record', error)
+        return {}
+      }
+    }
+
+    /**
+     * Persist the browser-local per-project sort overrides (best effort).
+     * @param {Record<string, string>} sorts - workspace key -> sort mode.
+     */
+    function writeProjectSorts(sorts) {
+      try {
+        window.localStorage.setItem(PROJECT_SORTS_KEY, JSON.stringify(sorts))
+      } catch (error) {
+        console.warn('sidebar-sections: project sorts not persisted', error)
       }
     }
 
@@ -1480,7 +1514,7 @@ window.__ModuleLoader__.load({
      */
     function ProjectGroup({
       group, expanded, onToggle, onNewSession, onWorkspaceMenu, onSessionMenu,
-      onOpen, onTogglePin, onArchive, panelActive, rowDrag, t,
+      onOpen, onTogglePin, onArchive, panelActive, rowDrag, sortMode, onSort, t,
     }) {
       const [menuOpen, setMenuOpen] = useState(false)
       const groupLabel = t('actions.workspace.aria', { name: group.label })
@@ -1490,6 +1524,7 @@ window.__ModuleLoader__.load({
           role: 'treeitem',
           'aria-expanded': expanded,
           'aria-label': group.label,
+          'data-workspace': group.key === '' ? '__ungrouped__' : group.key,
           tabIndex: 0,
           onClick: onToggle,
           onKeyDown: (event) => {
@@ -1524,6 +1559,10 @@ window.__ModuleLoader__.load({
             onClick: () => { setMenuOpen((open) => !open) },
           }, h(IconEllipsisOutlineRegular, { size: 16 })),
           items: [
+            { type: 'label', id: 'project-sort', text: t('sort.label') },
+            { id: 'sort-manual', label: t('sort.manual') },
+            { id: 'sort-updated', label: t('sort.updated') },
+            { type: 'separator', id: 'project-separator' },
             { id: 'rename', label: t('rename'), icon: h(IconEditOutlineRegular, { size: 14 }) },
             {
               id: 'delete',
@@ -1532,8 +1571,13 @@ window.__ModuleLoader__.load({
               danger: true,
             },
           ],
+          selectedIds: [sortMode === 'manual' ? 'sort-manual' : 'sort-updated'],
           onSelect: (id) => {
             setMenuOpen(false)
+            if (id === 'sort-manual' || id === 'sort-updated') {
+              onSort(id === 'sort-manual' ? 'manual' : 'updated')
+              return
+            }
             onWorkspaceMenu(id)
           },
         }))),
@@ -1628,10 +1672,11 @@ window.__ModuleLoader__.load({
      * @param {object} props - title, count, expansion and action children.
      * @returns {object} the section header element.
      */
-    function SectionHeader({ title, count, collapsed, onToggle, children, t }) {
+    function SectionHeader({ sectionKey, title, count, collapsed, onToggle, children, t }) {
       return h('div', {
         className: 'dshss-sectionHeader',
         role: 'button',
+        'data-section': sectionKey,
         tabIndex: 0,
         'aria-expanded': !collapsed,
         'aria-label': t(collapsed ? 'section.expand' : 'section.collapse', { name: title }),
@@ -1696,7 +1741,9 @@ window.__ModuleLoader__.load({
       const [collapsedSections, setCollapsedSections] = useState(readSectionCollapsed)
       const [sectionViews, setSectionViews] = useState(readSectionViews)
       const [manualOrder, setManualOrder] = useState(readManualOrder)
+      const [projectSorts, setProjectSorts] = useState(readProjectSorts)
       const [dragState, setDragState] = useState(null)
+      const [contextMenu, setContextMenu] = useState(null)
       const [recentLimit, setRecentLimit] = useState(RECENT_INITIAL)
       const [notice, setNotice] = useState(null)
       const [hoverPreview, setHoverPreview] = useState(null)
@@ -1902,6 +1949,21 @@ window.__ModuleLoader__.load({
       /** Normalize a Workspace key for the manual-order record. */
       const projectOrderKey = (key) => (key === '' ? '__ungrouped__' : key)
 
+      /** Effective sort for one project group: its override, else the section default. */
+      const projectSortOf = (key) => {
+        const override = projectSorts[projectOrderKey(key)]
+        return override === 'manual' || override === 'updated' ? override : sectionViews.projects.sort
+      }
+
+      /** Persist one project group's sort override. */
+      const setProjectSort = (key, mode) => {
+        setProjectSorts((previous) => {
+          const next = { ...previous, [projectOrderKey(key)]: mode }
+          writeProjectSorts(next)
+          return next
+        })
+      }
+
       /** Stable sort by a drag-created order; unknown ids keep their relative slot. */
       const applyManualOrder = (nodes, order) => {
         if (order === undefined || order.length === 0) return nodes
@@ -2024,15 +2086,19 @@ window.__ModuleLoader__.load({
       const pinnedNodes = sectionViews.pinnedSort === 'manual'
         ? applyManualOrder(orderNodes(sections.pinned, 'manual'), manualOrder.pinned)
         : [...sections.pinned].sort((left, right) => right.updatedAt - left.updatedAt)
-      const projectGroups = sections.projects.map((group) => ({
-        ...group,
-        nodes: sectionViews.projects.sort === 'manual'
-          ? applyManualOrder(
-            orderNodes(group.nodes, 'manual'),
-            manualOrder.projects[projectOrderKey(group.key)] ?? [],
-          )
-          : group.nodes,
-      }))
+      const projectGroups = sections.projects.map((group) => {
+        const sort = projectSortOf(group.key)
+        return {
+          ...group,
+          sort,
+          nodes: sort === 'manual'
+            ? applyManualOrder(
+              orderNodes(group.nodes, 'manual'),
+              manualOrder.projects[projectOrderKey(group.key)] ?? [],
+            )
+            : group.nodes,
+        }
+      })
       const flatProjectNodes = sectionViews.projects.sort === 'manual'
         ? applyManualOrder(projectGroups.flatMap((group) => group.nodes), manualOrder.flat)
         : projectGroups.flatMap((group) => group.nodes)
@@ -2149,6 +2215,8 @@ window.__ModuleLoader__.load({
         return projectGroups.map((group) => h(ProjectGroup, {
           key: group.key === '' ? '__ungrouped__' : group.key,
           group: { ...group, currentId: sections.currentId },
+          sortMode: group.sort,
+          onSort: (sort) => { setProjectSort(group.key, sort) },
           expanded: filtering ? true : collapsed[group.key] !== true,
           onToggle: () => { toggleGroup(group.key) },
           onNewSession: () => { invoke(() => actions.startSession(group.workspaceId), report, 'start session') },
@@ -2161,7 +2229,7 @@ window.__ModuleLoader__.load({
           onTogglePin: togglePin,
           onArchive: archiveNode,
           panelActive,
-          rowDrag: rowDrag('project:' + projectOrderKey(group.key), sectionViews.projects.sort === 'manual', group.workspaceId),
+          rowDrag: rowDrag('project:' + projectOrderKey(group.key), group.sort === 'manual', group.workspaceId),
           t,
         }))
       }
@@ -2242,6 +2310,7 @@ window.__ModuleLoader__.load({
           : [
             h('section', { key: 'pinned', className: 'dshss-section', 'aria-label': t('section.pinned') },
               h(SectionHeader, {
+                sectionKey: 'pinned',
                 title: t('section.pinned'),
                 count: pinnedCount,
                 collapsed: !pinnedOpen,
@@ -2257,6 +2326,7 @@ window.__ModuleLoader__.load({
               pinnedOpen ? pinnedRows() : null),
             h('section', { key: 'projects', className: 'dshss-section', 'aria-label': t('section.projects') },
               h(SectionHeader, {
+                sectionKey: 'projects',
                 title: t('section.projects'),
                 count: projectCount,
                 collapsed: !projectsOpen,
@@ -2278,6 +2348,7 @@ window.__ModuleLoader__.load({
               projectsOpen ? projectRows() : null),
             h('section', { key: 'recent', className: 'dshss-section', 'aria-label': t('section.recent') },
               h(SectionHeader, {
+                sectionKey: 'recent',
                 title: t('section.recent'),
                 count: recentCount,
                 collapsed: !recentOpen,
@@ -2299,6 +2370,7 @@ window.__ModuleLoader__.load({
               recentOpen ? recentRows() : null),
             h('section', { key: 'archived', className: 'dshss-section', 'aria-label': t('section.archived') },
               h(SectionHeader, {
+                sectionKey: 'archived',
                 title: t('section.archived'),
                 count: archivedCount,
                 collapsed: !archivedOpen,
@@ -2313,6 +2385,144 @@ window.__ModuleLoader__.load({
               })),
               archivedOpen ? archivedRows() : null),
           ]
+
+      /** Resolve the rendered node for a session id (context-menu target). */
+      const findSessionNode = (sessionId) => {
+        const pools = [sections.pinned, ...sections.projects.map((group) => group.nodes), sections.recentAll, sections.archivedNodes]
+        for (const pool of pools) {
+          const match = pool.find((node) => node.id === sessionId)
+          if (match !== undefined) return match
+        }
+        return undefined
+      }
+
+      /** Open the same menu on right-click for rows, project rows and headings. */
+      const openContextMenu = (event) => {
+        const target = event.target
+        const point = { x: event.clientX, y: event.clientY }
+        const row = target?.closest?.('.dshss-row[data-session]')
+        if (row !== null && row !== undefined) {
+          event.preventDefault()
+          setContextMenu({ kind: 'row', sessionId: row.dataset.session, point })
+          return
+        }
+        const projectRow = target?.closest?.('.dshss-projectRow[data-workspace]')
+        if (projectRow !== null && projectRow !== undefined) {
+          event.preventDefault()
+          setContextMenu({ kind: 'project', workspaceKey: projectRow.dataset.workspace, point })
+          return
+        }
+        const sectionHeader = target?.closest?.('.dshss-sectionHeader[data-section]')
+        if (sectionHeader !== null && sectionHeader !== undefined) {
+          event.preventDefault()
+          setContextMenu({ kind: 'section', section: sectionHeader.dataset.section, point })
+        }
+      }
+
+      const contextMenuElement = (() => {
+        if (contextMenu === null) return null
+        const items = []
+        const selectedIds = []
+        let onSelect = () => {}
+        if (contextMenu.kind === 'row') {
+          const node = findSessionNode(contextMenu.sessionId)
+          if (node === undefined) return null
+          items.push(
+            { id: 'pin', label: node.pinned ? t('menu.unpinSession') : t('menu.pinSession'), icon: node.pinned ? h(IconPinFillRegular, { size: 14 }) : h(IconPinOutlineRegular, { size: 14 }) },
+            { id: 'rename', label: t('menu.renameSession'), icon: h(IconEditOutlineRegular, { size: 14 }) },
+            { id: 'fork', label: t('menu.forkSession'), icon: h(IconBranchOutlineRegular, { size: 14 }) },
+            { id: 'archive', label: node.archived ? t('menu.unarchiveSession') : t('menu.archiveSession'), icon: node.archived ? h(IconUnarchiveOutlineRegular, { size: 14 }) : h(IconArchiveOutlineRegular, { size: 14 }) },
+            { id: 'copy-id', label: t('menu.sessionId'), icon: h(IconCopyOutlineRegular, { size: 14 }), separatorBefore: true },
+          )
+          onSelect = (id) => {
+            if (id === 'pin') { togglePin(node); return }
+            if (id === 'archive') { archiveNode(node); return }
+            if (id === 'rename' || id === 'fork' || id === 'copy-id') runSessionMenu(node, id)
+          }
+        } else if (contextMenu.kind === 'project') {
+          const group = projectGroups.find((candidate) => projectOrderKey(candidate.key) === contextMenu.workspaceKey)
+          if (group === undefined) return null
+          items.push(
+            { type: 'label', id: 'project-sort', text: t('sort.label') },
+            { id: 'sort-manual', label: t('sort.manual') },
+            { id: 'sort-updated', label: t('sort.updated') },
+            { type: 'separator', id: 'project-separator' },
+            { id: 'rename', label: t('rename'), icon: h(IconEditOutlineRegular, { size: 14 }) },
+            { id: 'delete', label: t('delete.workspace'), icon: h(IconTrashOutlineRegular, { size: 14 }), danger: true },
+          )
+          selectedIds.push(group.sort === 'manual' ? 'sort-manual' : 'sort-updated')
+          onSelect = (id) => {
+            if (id === 'sort-manual' || id === 'sort-updated') {
+              setProjectSort(group.key, id === 'sort-manual' ? 'manual' : 'updated')
+              return
+            }
+            if (id === 'rename') actions.renameWorkspace(group.workspaceId, group.label)
+            else if (id === 'delete') actions.deleteWorkspace(group.workspaceId, group.label)
+          }
+        } else {
+          const section = contextMenu.section
+          const sortValue = section === 'pinned'
+            ? sectionViews.pinnedSort
+            : section === 'recent'
+              ? sectionViews.recent.sort
+              : section === 'projects' ? sectionViews.projects.sort : sectionViews.archivedSort
+          if (section === 'projects' || section === 'recent') {
+            const grouping = section === 'projects' ? sectionViews.projects.group : sectionViews.recent.group
+            items.push(
+              { type: 'label', id: 'group-by', text: t('group.label') },
+              { id: 'group-project', label: t('group.byProject'), icon: h(IconFolderCloseRegular, { size: 14 }) },
+              { id: 'group-list', label: t('group.oneList'), icon: h(IconQueueOutlineRegular, { size: 14 }) },
+            )
+            selectedIds.push(grouping === 'project' ? 'group-project' : 'group-list')
+          }
+          items.push(
+            { type: 'label', id: 'sort-by', text: t('sort.label') },
+            { id: 'sort-manual', label: t('sort.manual') },
+            { id: 'sort-updated', label: t('sort.updated') },
+          )
+          selectedIds.push(sortValue === 'manual' ? 'sort-manual' : 'sort-updated')
+          onSelect = (id) => {
+            if (id === 'group-project' || id === 'group-list') {
+              const group = id === 'group-project' ? 'project' : 'list'
+              if (section === 'projects') setProjectsView({ group })
+              else setRecentView({ group })
+              return
+            }
+            if (id !== 'sort-manual' && id !== 'sort-updated') return
+            const sort = id === 'sort-manual' ? 'manual' : 'updated'
+            if (section === 'pinned') setPinnedSort(sort)
+            else if (section === 'archived') setArchivedSort(sort)
+            else if (section === 'projects') setProjectsView({ sort })
+            else setRecentView({ sort })
+          }
+        }
+        return h(Menu, {
+          open: true,
+          onClose: () => { setContextMenu(null) },
+          portal: true,
+          align: 'start',
+          side: 'bottom',
+          listClassName: 'dshss-viewMenu',
+          anchor: h('span', { style: { display: 'none' } }),
+          getAnchorRect: () => ({
+            left: contextMenu.point.x,
+            top: contextMenu.point.y,
+            width: 0,
+            height: 0,
+            right: contextMenu.point.x,
+            bottom: contextMenu.point.y,
+            x: contextMenu.point.x,
+            y: contextMenu.point.y,
+            toJSON() { return this },
+          }),
+          items,
+          selectedIds,
+          onSelect: (id) => {
+            setContextMenu(null)
+            onSelect(id)
+          },
+        })
+      })()
 
       const hoverCard = hoverPreview === null ? null : (() => {
         const width = 268
@@ -2339,9 +2549,11 @@ window.__ModuleLoader__.load({
         className: 'dshss-root' + contentWidth,
         onMouseOver: hoverRow,
         onMouseOut: leaveRow,
+        onContextMenu: openContextMenu,
       }, style,
         searchRow,
         hoverCard,
+        contextMenuElement,
         notice !== null
           ? h('div', { className: 'dshss-notice', role: 'status' },
             h('span', { className: 'dshss-noticeText' }, notice),
