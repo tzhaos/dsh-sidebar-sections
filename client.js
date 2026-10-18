@@ -1092,6 +1092,7 @@ window.__ModuleLoader__.load({
 .dshss-sectionArrowCollapsed { transform: rotate(-90deg); }
 .dshss-sectionTitle {
   margin: 0;
+  color: var(--dsw-alias-label-secondary);
   font-size: 15px;
   line-height: 22px;
   font-weight: 600;
