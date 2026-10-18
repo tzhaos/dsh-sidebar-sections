@@ -346,6 +346,15 @@ function createFakePrimitives(reactRuntime) {
   function Tooltip({ children }) {
     return children ?? null
   }
+  function Switch({ checked, label, onChange }) {
+    return h('button', {
+      type: 'button',
+      role: 'switch',
+      'aria-checked': checked === true ? 'true' : 'false',
+      'aria-label': label,
+      onClick: () => onChange?.(!checked),
+    })
+  }
   function Menu({ open, anchor, items, children, selectedIds, onSelect }) {
     const rows = []
     if (open && items !== undefined) {
@@ -395,6 +404,7 @@ function createFakePrimitives(reactRuntime) {
     Tooltip,
     Menu,
     MenuItemButton,
+    Switch,
     Modal,
     Button,
     writeClipboard,
@@ -516,6 +526,7 @@ function applyPlugin() {
         localeRegistrations.push({ ns, dicts })
         return () => {}
       },
+      bind: () => (key) => key,
     },
     slots: {
       inject: (_slot, callback) => callback(),
@@ -913,6 +924,87 @@ await check('archived conversations live in the Archived section only', () => {
   assertEqual(calls.at(-1), ['unarchiveSession', 's4'], 'unarchive dispatched')
 })
 
+/** Mount the plugin settings tab from one applied scenario. */
+function mountSettings(applied) {
+  const registration = applied.registrations.find((entry) => entry.options.name === 'settings.plugins.tab')
+  assert(registration, 'settings tab registration exists')
+  const t = translator(applied.localeRegistrations[0].dicts.zh)
+  const harness = mountComponent(registration.component, {
+    t,
+    ...registration.options.inject(),
+  }, applied.reactRuntime)
+  return { harness, t, registration }
+}
+
+await check('settings tab toggles the Archived section and persists it', () => {
+  const applied = scenario()
+  const { harness: settingsHarness } = mountSettings(applied)
+  const toggle = findOne(settingsHarness.tree, (element) => element.props?.role === 'switch')
+  assertEqual(toggle.props['aria-checked'], 'true', 'Archived shown by default')
+  toggle.props.onClick()
+  settingsHarness.rerender()
+  applied.harness.rerender()
+  assertEqual(findAll(applied.harness.tree, (element) => element.type === 'section'
+    && element.props['aria-label'] === translator(applied.localeRegistrations[0].dicts.zh)('section.archived')).length, 0,
+  'Archived section hidden')
+  const stored = JSON.parse(applied.browserWindow.localStorage.getItem('dsh.sidebarSections.managedSettings'))
+  assertEqual(stored.showArchived, false, 'setting persisted')
+  const toggleAgain = findOne(settingsHarness.tree, (element) => element.props?.role === 'switch')
+  toggleAgain.props.onClick()
+  settingsHarness.rerender()
+  applied.harness.rerender()
+  assert(findSection(applied.harness.tree, translator(applied.localeRegistrations[0].dicts.zh), 'section.archived'), 'Archived section restored')
+})
+
+await check('safe delete removes an archived conversation and settings restores it', () => {
+  const applied = scenario()
+  const overlay = applied.registrations.find((entry) => entry.options.name === 'shell.overlay')
+  overlay.options.inject().submitSessionDelete('s4', 'Archived talk')
+  applied.harness.rerender()
+  const t = translator(applied.localeRegistrations[0].dicts.zh)
+  assertEqual(findAll(applied.harness.tree, isSessionRow).filter((row) => row.props['data-session'] === 's4').length, 0,
+    'removed row is hidden')
+  const stored = JSON.parse(applied.browserWindow.localStorage.getItem('dsh.sidebarSections.managedSettings'))
+  assertEqual(stored.removed.map((entry) => entry.id), ['s4'], 'removal persisted')
+  const { harness: settingsHarness } = mountSettings(applied)
+  const restore = findOne(settingsHarness.tree, (element) => element.type === 'button' && textOf(element) === t('settings.removed.restore'))
+  restore.props.onClick()
+  settingsHarness.rerender()
+  applied.harness.rerender()
+  assertEqual(findAll(applied.harness.tree, isSessionRow).filter((row) => row.props['data-session'] === 's4').length, 1,
+    'restored row returns')
+  const after = JSON.parse(applied.browserWindow.localStorage.getItem('dsh.sidebarSections.managedSettings'))
+  assertEqual(after.removed, [], 'restore clears the tombstone')
+})
+
+await check('safe delete dialog explains that the conversation record is kept', async () => {
+  const { harness, t, browserWindow } = mountDialog({ kind: 'delete-session', sessionId: 's4', title: 'Archived talk', seq: 1 })
+  assert(textOf(harness.tree).includes(t('dialog.deleteSession.body', { title: 'Archived talk' })), 'safe-delete body')
+  const confirm = findOne(harness.tree, (element) => element.type === 'button' && textOf(element) === t('dialog.deleteSession.confirm'))
+  confirm.props.onClick()
+  await settle()
+  const stored = JSON.parse(browserWindow.localStorage.getItem('dsh.sidebarSections.managedSettings'))
+  assertEqual(stored.removed.map((entry) => entry.id), ['s4'], 'dialog writes a tombstone')
+})
+
+await check('the current conversation cannot be safely deleted', () => {
+  const list = createSessionList()
+  list.byId.s4 = { ...list.byId.s4, retainedBy: { mainView: 1 } }
+  const { harness, t, browserWindow } = scenario({ useSessions: (selector) => selector(list) })
+  dispatch(harness, harness.tree, 'onContextMenu', syntheticEvent({
+    target: contextTarget('row', { session: 's4' }),
+    clientX: 40,
+    clientY: 80,
+  }))
+  const menu = findOne(harness.tree, (element) => element.props?.role === 'menu')
+  const deleteItem = findOne(menu, (element) => element.type === 'button' && textOf(element) === t('menu.deleteSession'))
+  deleteItem.props.onClick()
+  harness.rerender()
+  assert(textOf(harness.tree).includes(t('toast.currentSessionDelete')), 'current-session refusal notice')
+  const stored = browserWindow.localStorage.getItem('dsh.sidebarSections.managedSettings')
+  assert(stored === null || JSON.parse(stored).removed.length === 0, 'no tombstone for the current session')
+})
+
 await check('Archived section shows an empty hint when nothing is archived', () => {
   const { harness, t } = scenario({
     useWorkspaces: (selector) => selector({
@@ -1029,6 +1121,7 @@ await check('archived rows right-click to an unarchive action without pin', () =
   const items = findAll(menu, (element) => element.type === 'button')
   assertEqual(items.map(textOf), [
     t('menu.renameSession'), t('menu.forkSession'), t('menu.unarchiveSession'), t('menu.sessionId'),
+    t('menu.deleteSession'),
   ], 'archived row context menu items')
   items[2].props.onClick()
   assertEqual(calls.at(-1), ['unarchiveSession', 's4'], 'context menu unarchives')
@@ -1671,7 +1764,7 @@ function mountDialog(request) {
     useRequest: (selector) => selector(request),
     t,
   }, applyResult.reactRuntime)
-  return { harness, t, calls: applyResult.calls, injected }
+  return { harness, t, calls: applyResult.calls, injected, applyResult, browserWindow: applyResult.browserWindow }
 }
 
 await check('workspace rename dialog submits the trimmed title', async () => {

@@ -54,6 +54,7 @@ window.__ModuleLoader__.load({
       Button,
       Modal,
       Menu,
+      Switch,
       Tooltip,
       writeClipboard,
       relativeTime,
@@ -77,6 +78,18 @@ window.__ModuleLoader__.load({
     } = primitives
     const { useEffect, useMemo, useRef, useState } = React
     const h = React.createElement
+
+    /**
+     * Subscribe one component to a snapshot store without adding a second
+     * state library.
+     * @param {object} store - snapshot store with getSnapshot/subscribe.
+     * @returns {any} current snapshot.
+     */
+    function useStoreValue(store) {
+      const [value, setValue] = useState(() => store.getSnapshot())
+      useEffect(() => store.subscribe(() => { setValue(store.getSnapshot()) }), [store])
+      return value
+    }
 
     /** Locale namespace owned by this plugin. */
     const NS = 'sidebarSections'
@@ -104,6 +117,7 @@ window.__ModuleLoader__.load({
     const SECTION_VIEW_KEY = 'dsh.sidebarSections.sectionViews'
     const MANUAL_ORDER_KEY = 'dsh.sidebarSections.manualOrder'
     const PROJECT_SORTS_KEY = 'dsh.sidebarSections.projectSorts'
+    const MANAGED_SETTINGS_KEY = 'dsh.sidebarSections.managedSettings'
     /** Notice lifetime before it dismisses itself. */
     const NOTICE_TIMEOUT_MS = 6000
     /** Relative-time refresh cadence. */
@@ -190,6 +204,21 @@ window.__ModuleLoader__.load({
       'dialog.delete.body': '将把“{name}”从工作区列表中移除。文件夹与会话记录会保留，其会话将显示在“未分组”下。',
       'dialog.delete.confirm': '删除',
       'dialog.delete.error': '删除失败：{message}',
+      'dialog.deleteSession.title': '删除会话',
+      'dialog.deleteSession.body': '把“{title}”从侧边栏移除。会话记录不会被删除，可以在插件设置中恢复。',
+      'dialog.deleteSession.confirm': '删除',
+      'menu.deleteSession': '删除会话（安全）',
+      'toast.currentSessionDelete': '当前打开的会话不能删除，请先切换到其他会话',
+      'settings.tab': '侧边栏分区',
+      'settings.title': '侧边栏分区',
+      'settings.intro': '控制侧边栏分区与安全删除的显示方式。这些设置只保存在浏览器本地。',
+      'settings.archived.label': '显示归档分区',
+      'settings.archived.desc': '关闭后归档会话仍保留，但侧边栏不再显示“归档”分区；可以随时重新开启。',
+      'settings.removed.title': '已移除的会话',
+      'settings.removed.desc': '安全删除只从侧边栏移除会话，不修改磁盘上的会话记录。恢复后会话会重新出现在原来的分区。',
+      'settings.removed.empty': '没有已移除的会话',
+      'settings.removed.restore': '恢复',
+      'settings.removed.unknown': '会话 {id}',
       'dialog.renameSession.error': '重命名失败：{message}',
       'dialog.archiveError': '归档失败：{message}',
       'dialog.cancel': '取消',
@@ -298,6 +327,21 @@ window.__ModuleLoader__.load({
       'dialog.delete.body': 'Removes “{name}” from the workspace list. The folder and conversation history are kept; its conversations appear under “Ungrouped”.',
       'dialog.delete.confirm': 'Delete',
       'dialog.delete.error': 'Delete failed: {message}',
+      'dialog.deleteSession.title': 'Delete conversation',
+      'dialog.deleteSession.body': 'Removes “{title}” from the sidebar. The conversation record is not deleted and can be restored from the plugin settings.',
+      'dialog.deleteSession.confirm': 'Delete',
+      'menu.deleteSession': 'Delete conversation (safe)',
+      'toast.currentSessionDelete': 'The open conversation cannot be deleted; switch to another conversation first',
+      'settings.tab': 'Sidebar sections',
+      'settings.title': 'Sidebar sections',
+      'settings.intro': 'Control how the sidebar sections and safe deletion behave. These settings are stored in this browser only.',
+      'settings.archived.label': 'Show Archived section',
+      'settings.archived.desc': 'When off, archived conversations are kept but the Archived section is hidden; turn it back on at any time.',
+      'settings.removed.title': 'Removed conversations',
+      'settings.removed.desc': 'Safe delete only removes a conversation from the sidebar; the conversation record on disk is unchanged. Restoring it puts it back in its original section.',
+      'settings.removed.empty': 'No removed conversations',
+      'settings.removed.restore': 'Restore',
+      'settings.removed.unknown': 'Conversation {id}',
       'dialog.renameSession.error': 'Rename failed: {message}',
       'dialog.archiveError': 'Archive failed: {message}',
       'dialog.cancel': 'Cancel',
@@ -462,7 +506,7 @@ window.__ModuleLoader__.load({
      * @param {(key: string, params?: object) => string} input.t - translate seat.
      * @returns {object} derived sections.
      */
-    function deriveSections({ list, workspaceSnapshot, statuses, query, now, recentLimit, t }) {
+    function deriveSections({ list, workspaceSnapshot, statuses, query, now, recentLimit, t, hiddenSessionIds, showArchived = true }) {
       const archived = new Set(workspaceSnapshot.archivedSessionIds)
       const pinnedSet = new Set(workspaceSnapshot.pinnedSessionIds)
       const currentId = currentSessionId(list)
@@ -477,10 +521,11 @@ window.__ModuleLoader__.load({
         const rank = sessionRank.get(id)
         return rank === undefined ? 100000000 + list.ids.indexOf(id) : rank
       }
+      const hidden = hiddenSessionIds ?? new Set()
       const visible = new Set()
       for (const id of list.ids) {
         const summary = list.byId[id]
-        if (summary !== undefined && isVisibleSummary(summary, currentId)) visible.add(id)
+        if (summary !== undefined && !hidden.has(id) && isVisibleSummary(summary, currentId)) visible.add(id)
       }
 
       const q = query.trim().toLowerCase()
@@ -581,15 +626,17 @@ window.__ModuleLoader__.load({
 
       // Archived section: every archived conversation, Host manual order; the
       // Browser applies the section's own sort choice.
-      const archivedNodes = list.ids
-        .filter((id) => {
-          const summary = list.byId[id]
-          if (summary === undefined || !visible.has(id) || !archived.has(id)) return false
-          if (pinnedSet.has(id)) return false
-          return matches(summary)
-        })
-        .map((id) => nodeOf(list.byId[id]))
-        .sort((left, right) => left.manualRank - right.manualRank)
+      const archivedNodes = showArchived
+        ? list.ids
+          .filter((id) => {
+            const summary = list.byId[id]
+            if (summary === undefined || !visible.has(id) || !archived.has(id)) return false
+            if (pinnedSet.has(id)) return false
+            return matches(summary)
+          })
+          .map((id) => nodeOf(list.byId[id]))
+          .sort((left, right) => left.manualRank - right.manualRank)
+        : []
 
       const recentAll = recentIds.map((id) => nodeOf(list.byId[id]))
       return {
@@ -641,6 +688,39 @@ window.__ModuleLoader__.load({
       } catch (error) {
         warnState('could not persist ' + key, error)
       }
+    }
+
+    /**
+     * Read the browser-local managed settings: whether Archived is shown and
+     * which sessions were safely removed from the sidebar.
+     * @returns {{showArchived: boolean, removed: Array<{id: string, title: string, removedAt: number}>}} settings.
+     */
+    function readManagedSettings() {
+      const parsed = readStoredJson(MANAGED_SETTINGS_KEY, {})
+      const removed = []
+      if (Array.isArray(parsed.removed)) {
+        for (const entry of parsed.removed) {
+          if (entry === null || typeof entry !== 'object' || typeof entry.id !== 'string') continue
+          if (removed.some((candidate) => candidate.id === entry.id)) continue
+          removed.push({
+            id: entry.id,
+            title: typeof entry.title === 'string' && entry.title !== '' ? entry.title : entry.id,
+            removedAt: typeof entry.removedAt === 'number' ? entry.removedAt : 0,
+          })
+        }
+      }
+      return { showArchived: parsed.showArchived !== false, removed }
+    }
+
+    /**
+     * Persist managed settings (best effort).
+     * @param {{showArchived: boolean, removed: Array<object>}} settings - current settings.
+     */
+    function writeManagedSettings(settings) {
+      writeStoredJson(MANAGED_SETTINGS_KEY, {
+        showArchived: settings.showArchived,
+        removed: settings.removed,
+      })
     }
 
     /**
@@ -1337,6 +1417,20 @@ window.__ModuleLoader__.load({
 }
 .dshss-noticeClose:hover { color: var(--dsw-alias-label-primary); }
 
+/* Plugin settings tab (Settings → Built-in plugins → Sidebar sections). */
+.dshss-settings { display: flex; flex-direction: column; gap: 16px; max-width: 720px; color: var(--dsw-alias-label-primary); }
+.dshss-settingsIntro { margin: 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
+.dshss-settingsRow { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 14px 0; border-bottom: .5px solid var(--dsw-alias-border-l2); }
+.dshss-settingsText { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.dshss-settingsLabel { font-size: 14px; line-height: 22px; color: var(--dsw-alias-label-primary); }
+.dshss-settingsDesc { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
+.dshss-settingsSectionTitle { margin: 0; font-size: 15px; font-weight: 600; line-height: 22px; color: var(--dsw-alias-label-primary); }
+.dshss-settingsEmpty { margin: 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
+.dshss-settingsRemoved { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.dshss-settingsRemovedRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border: .5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); }
+.dshss-settingsRemovedTitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+.dshss-settingsRemoveIcon { color: var(--dsw-alias-label-tertiary); flex: none; display: inline-flex; }
+
 /* Dialog body content rendered inside the host Modal. */
 .dshss-dialogContent { display: flex; flex-direction: column; gap: 16px; }
 .dshss-dialogText { margin: 0; font-size: 14px; line-height: 22px; color: var(--dsw-alias-label-secondary); }
@@ -1427,6 +1521,15 @@ window.__ModuleLoader__.load({
         },
         { id: 'copy-id', label: t('menu.sessionId'), icon: h(IconCopyOutlineRegular, { size: 14 }), separatorBefore: true },
       )
+      if (node.archived) {
+        items.push({
+          id: 'delete-session',
+          label: t('menu.deleteSession'),
+          icon: h(IconTrashOutlineRegular, { size: 14 }),
+          danger: true,
+          separatorBefore: true,
+        })
+      }
       return items
     }
 
@@ -1789,8 +1892,9 @@ window.__ModuleLoader__.load({
     function Browser(props) {
       const {
         wide, expandSidebar, useSessions, useWorkspaces, useSessionStatus, usePanelInfo,
-        t, actions,
+        t, actions, settings,
       } = props
+      const managed = useStoreValue(settings)
       const list = useSessions((state) => state)
       const workspaceSnapshot = useWorkspaces((state) => state)
       const statuses = useSessionStatus((state) => state)
@@ -1819,6 +1923,7 @@ window.__ModuleLoader__.load({
       const HOVER_LINGER_MS = 180
 
       const loading = workspaceSnapshot.phase !== 'ready' || list.phase !== 'ready'
+      const hiddenSessionIds = useMemo(() => new Set(managed.removed.map((entry) => entry.id)), [managed])
       const sections = useMemo(() => deriveSections({
         list,
         workspaceSnapshot,
@@ -1827,7 +1932,9 @@ window.__ModuleLoader__.load({
         now,
         recentLimit,
         t,
-      }), [list, workspaceSnapshot, statuses, query, now, recentLimit, t])
+        hiddenSessionIds,
+        showArchived: managed.showArchived,
+      }), [list, workspaceSnapshot, statuses, query, now, recentLimit, t, hiddenSessionIds, managed.showArchived])
 
       // Keys that currently have a rendered row. A preview must not outlive its
       // trigger: archiving, filtering, deleting or collapsing can unmount the
@@ -2124,8 +2231,21 @@ window.__ModuleLoader__.load({
         )
       }
 
+      /** Ask for a safe delete; the open conversation may not be removed. */
+      const requestSessionDelete = (node) => {
+        if (node.id === sections.currentId) {
+          report(t('toast.currentSessionDelete'))
+          return
+        }
+        actions.requestSessionDelete(node.id, node.title)
+      }
+
       /** Row-menu dispatch shared by conversation rows. */
       const runSessionMenu = (node, action) => {
+        if (action === 'delete-session') {
+          requestSessionDelete(node)
+          return
+        }
         if (action === 'rename') {
           actions.requestSessionRename(node.id, node.title)
           return
@@ -2642,7 +2762,7 @@ window.__ModuleLoader__.load({
                 t,
               })),
               recentOpen ? recentRows() : null),
-            h('section', { key: 'archived', className: 'dshss-section', 'aria-label': t('section.archived') },
+            managed.showArchived ? h('section', { key: 'archived', className: 'dshss-section', 'aria-label': t('section.archived') },
               h(SectionHeader, {
                 sectionKey: 'archived',
                 onContextMenuKey: (event) => openContextMenuForKey(event, 'section', { section: 'archived' }),
@@ -2658,7 +2778,7 @@ window.__ModuleLoader__.load({
                 onSort: setArchivedSort,
                 t,
               })),
-              archivedOpen ? archivedRows() : null),
+              archivedOpen ? archivedRows() : null) : null,
           ]
 
       /** Resolve the rendered node for a session id (context-menu target). */
@@ -2708,6 +2828,7 @@ window.__ModuleLoader__.load({
           onSelect = (id) => {
             if (id === 'pin') { togglePin(node); return }
             if (id === 'archive') { archiveNode(node); return }
+            if (id === 'delete-session') { requestSessionDelete(node); return }
             if (id === 'rename' || id === 'fork' || id === 'copy-id') runSessionMenu(node, id)
           }
         } else if (contextMenu.kind === 'project') {
@@ -2853,7 +2974,7 @@ window.__ModuleLoader__.load({
      * @param {object} props - overlay registration props.
      * @returns {object | null} the dialog, or null when no request is pending.
      */
-    function DialogHost({ useRequest, submitRename, submitDelete, submitSessionRename, submitArchive, dismissDialog, t }) {
+    function DialogHost({ useRequest, submitRename, submitDelete, submitSessionRename, submitArchive, submitSessionDelete, dismissDialog, t }) {
       const request = useRequest((value) => value)
       if (request === null || request === undefined) return null
       return h(DialogBody, {
@@ -2863,6 +2984,7 @@ window.__ModuleLoader__.load({
         submitDelete,
         submitSessionRename,
         submitArchive,
+        submitSessionDelete,
         dismissDialog,
         t,
       })
@@ -2873,7 +2995,7 @@ window.__ModuleLoader__.load({
      * @param {object} props - request and submission callbacks.
      * @returns {object} the Host Modal element.
      */
-    function DialogBody({ request, submitRename, submitDelete, submitSessionRename, submitArchive, dismissDialog, t }) {
+    function DialogBody({ request, submitRename, submitDelete, submitSessionRename, submitArchive, submitSessionDelete, dismissDialog, t }) {
       const workspaceRename = request.kind === 'rename'
       const sessionRename = request.kind === 'rename-session'
       const rename = workspaceRename || sessionRename
@@ -2890,16 +3012,20 @@ window.__ModuleLoader__.load({
         inputRef.current.select()
       }, [])
 
-      const title = request.kind === 'delete'
-        ? t('dialog.delete.title')
-        : request.kind === 'archive-session'
-          ? t('archive.confirm.title')
-          : sessionRename ? t('rename.session.title') : t('dialog.rename.title')
-      const confirmLabel = request.kind === 'delete'
-        ? t('dialog.delete.confirm')
-        : request.kind === 'archive-session'
-          ? t('archive.confirm.action')
-          : t('dialog.rename.confirm')
+      const title = request.kind === 'delete-session'
+        ? t('dialog.deleteSession.title')
+        : request.kind === 'delete'
+          ? t('dialog.delete.title')
+          : request.kind === 'archive-session'
+            ? t('archive.confirm.title')
+            : sessionRename ? t('rename.session.title') : t('dialog.rename.title')
+      const confirmLabel = request.kind === 'delete-session'
+        ? t('dialog.deleteSession.confirm')
+        : request.kind === 'delete'
+          ? t('dialog.delete.confirm')
+          : request.kind === 'archive-session'
+            ? t('archive.confirm.action')
+            : t('dialog.rename.confirm')
 
       const close = () => { if (!busy) dismissDialog() }
 
@@ -2914,12 +3040,14 @@ window.__ModuleLoader__.load({
             ? submitSessionRename(request.sessionId, value.trim())
             : request.kind === 'delete'
               ? submitDelete(request.workspaceId)
-              : submitArchive(request.sessionId)
+              : request.kind === 'delete-session'
+                ? submitSessionDelete(request.sessionId, request.title)
+                : submitArchive(request.sessionId)
         Promise.resolve(operation).then(() => {
           dismissDialog()
         }).catch((failure) => {
           setBusy(false)
-          const key = request.kind === 'delete'
+          const key = request.kind === 'delete-session' || request.kind === 'delete'
             ? 'dialog.delete.error'
             : request.kind === 'archive-session'
               ? 'dialog.archiveError'
@@ -2959,6 +3087,8 @@ window.__ModuleLoader__.load({
           }))
       } else if (request.kind === 'delete') {
         body = h('p', { className: 'dshss-dialogText' }, t('dialog.delete.body', { name: request.title }))
+      } else if (request.kind === 'delete-session') {
+        body = h('p', { className: 'dshss-dialogText' }, t('dialog.deleteSession.body', { title: request.title }))
       } else {
         body = h('div', { className: 'dshss-dialogContent' },
           h('p', { className: 'dshss-dialogText' }, t('archive.confirm.desc', { title: request.title })),
@@ -2986,6 +3116,43 @@ window.__ModuleLoader__.load({
         error === null ? null : h('p', { className: 'dshss-dialogError', role: 'alert' }, error)))
     }
 
+    /**
+     * Plugin settings tab: Archived visibility and recovery of safely removed
+     * conversations. The settings store is browser-local and shared with the
+     * sidebar through Cordis injection.
+     * @param {object} props - settings store, actions and locale seat.
+     * @returns {object} the settings page.
+     */
+    function SettingsPanel({ settings, actions, t }) {
+      const managed = useStoreValue(settings)
+      const removed = [...managed.removed].sort((left, right) => right.removedAt - left.removedAt)
+      return h('div', { className: 'dshss-settings' },
+        h('p', { className: 'dshss-settingsIntro' }, t('settings.intro')),
+        h('div', { className: 'dshss-settingsRow' },
+          h('div', { className: 'dshss-settingsText' },
+            h('span', { className: 'dshss-settingsLabel' }, t('settings.archived.label')),
+            h('span', { className: 'dshss-settingsDesc' }, t('settings.archived.desc'))),
+          h(Switch, {
+            checked: managed.showArchived,
+            label: t('settings.archived.label'),
+            onChange: (value) => { actions.setShowArchived(value === true) },
+          })),
+        h('div', { className: 'dshss-settingsText' },
+          h('h3', { className: 'dshss-settingsSectionTitle' }, t('settings.removed.title')),
+          h('p', { className: 'dshss-settingsDesc' }, t('settings.removed.desc'))),
+        removed.length === 0
+          ? h('p', { className: 'dshss-settingsEmpty' }, t('settings.removed.empty'))
+          : h('ul', { className: 'dshss-settingsRemoved' },
+            removed.map((entry) => h('li', { key: entry.id, className: 'dshss-settingsRemovedRow' },
+              h('span', { className: 'dshss-settingsRemoveIcon' }, h(IconTrashOutlineRegular, { size: 14 })),
+              h('span', { className: 'dshss-settingsRemovedTitle', title: entry.title },
+                entry.title === entry.id ? t('settings.removed.unknown', { id: entry.id }) : entry.title),
+              h(Button, {
+                variant: 'ghost',
+                onClick: () => { actions.restoreSession(entry.id) },
+              }, t('settings.removed.restore'))))))
+    }
+
     // ---------------------------------------------------------------------
     // Plugin body
     // ---------------------------------------------------------------------
@@ -3004,6 +3171,36 @@ window.__ModuleLoader__.load({
         () => ctx.locale.register(NS, { zh, en }),
         'sidebar-sections: dictionaries',
       )
+      const t = ctx.locale.bind(NS)
+      const settingsStore = createSnapshotStore(readManagedSettings())
+      /** Persist and publish one complete managed-settings snapshot. */
+      const commitSettings = (next) => {
+        writeManagedSettings(next)
+        settingsStore.set(next)
+      }
+      const setShowArchived = (value) => {
+        const current = settingsStore.getSnapshot()
+        if (current.showArchived === value) return
+        commitSettings({ ...current, showArchived: value })
+      }
+      /** Safely remove one conversation from the sidebar (records stay intact). */
+      const removeSession = (sessionId, title) => {
+        const current = settingsStore.getSnapshot()
+        if (current.removed.some((entry) => entry.id === sessionId)) return
+        commitSettings({
+          ...current,
+          removed: [
+            { id: sessionId, title: typeof title === 'string' && title !== '' ? title : sessionId, removedAt: Date.now() },
+            ...current.removed,
+          ],
+        })
+      }
+      const restoreSession = (sessionId) => {
+        const current = settingsStore.getSnapshot()
+        const removed = current.removed.filter((entry) => entry.id !== sessionId)
+        if (removed.length === current.removed.length) return
+        commitSettings({ ...current, removed })
+      }
 
       // Dialog requests cross the sidebar and overlay registrations as one
       // bare observable; the overlay renders `useRequest` from it.
@@ -3065,6 +3262,9 @@ window.__ModuleLoader__.load({
         deleteWorkspace: (workspaceId, title) => {
           requestDialog({ kind: 'delete', workspaceId, title })
         },
+        requestSessionDelete: (sessionId, title) => {
+          requestDialog({ kind: 'delete-session', sessionId, title })
+        },
       }
 
       ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
@@ -3072,7 +3272,7 @@ window.__ModuleLoader__.load({
         priority: SLOT_PRIORITY,
         locale: NS,
         registrant: 'dsh-sidebar-sections',
-        inject: () => ({ actions }),
+        inject: () => ({ actions, settings: settingsStore }),
       }, Browser))
 
       ctx.slots.inject('shell.overlay', () => ctx.slots.register({
@@ -3091,9 +3291,22 @@ window.__ModuleLoader__.load({
             )
           },
           submitArchive: (sessionId) => uiWorkspace.archiveSession(sessionId, { stopActivity: true }),
+          submitSessionDelete: (sessionId, title) => { removeSession(sessionId, title) },
           dismissDialog: () => { dialogRequest.set(null) },
         }),
       }, DialogHost))
+
+      ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+        name: 'settings.plugins.tab',
+        id: 'sidebar-sections.settings',
+        order: 60,
+        label: () => t('settings.tab'),
+        locale: NS,
+        inject: () => ({
+          settings: settingsStore,
+          actions: { setShowArchived, restoreSession },
+        }),
+      }, SettingsPanel))
     }
 
     return {

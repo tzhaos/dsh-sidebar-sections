@@ -4,13 +4,13 @@
 
 A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI plugin that turns the
 sidebar into a **Pinned / Projects / Recent / Archived** conversation browser — with per-section
-menus, drag ordering, context menus and file-manager shortcuts.
+menus, drag ordering, context menus, safe delete, plugin settings and file-manager shortcuts.
 
 ![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.2.1--rc.2-4D6BFE)
-![Version](https://img.shields.io/badge/version-2.2.4-blue)
+![Version](https://img.shields.io/badge/version-2.3.0-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
-![Checks](https://img.shields.io/badge/checks-63-brightgreen)
+![Checks](https://img.shields.io/badge/checks-67-brightgreen)
 
 ![Sidebar sections, section menu and project menu](docs/screenshot.png)
 
@@ -54,7 +54,7 @@ archive.
 | **Pinned** | Host pin set, newest pin first. Rows keep the shipped conversation UI and a resting 📌 marker. |
 | **Projects** | One group per registered Workspace. Groups collapse (remembered browser-locally) and show the project folder icon. Each project can be sorted independently. |
 | **Recent** | Unpinned conversations, newest activity first (8 rows, then *Show more* in steps of 20). Optionally grouped by project. |
-| **Archived** | Every archived conversation, grayed out and not openable until restored; permanent fourth section with an empty hint. |
+| **Archived** | Every archived conversation, grayed out and not openable until restored; can be hidden from plugin settings; empty hint. |
 
 Each header is a large bold row with a collapse chevron and right-side actions; the `⋯` button is
 always the rightmost action so the menus line up across sections.
@@ -67,7 +67,7 @@ always the rightmost action so the menus line up across sections.
   focused row.
 - Hovering a row for ~400 ms shows a preview card with the title, owning project and time. The
   pointer can travel into the card; the card closes only after leaving both the row and the card.
-- Archived rows expose **Unarchive** instead of pin/archive and cannot be opened.
+- Archived rows expose **Unarchive** and **Delete conversation (safe)** instead of pin/archive and cannot be opened.
 
 ### Ordering
 
@@ -90,13 +90,27 @@ always the rightmost action so the menus line up across sections.
 - Keyboard: `Context Menu` or `Shift+F10` opens the menu; `Enter`/`Space` still activates the row,
   `Tab` reaches row actions, `Escape` closes menus and the filter.
 
+### Plugin settings and safe delete
+
+Open **Settings → Built-in plugins → Sidebar sections**:
+
+- **Show Archived section** — hide or restore the Archived section. Archived conversations remain in
+  the Host while hidden.
+- **Removed conversations** — safely deleted conversations are listed here and can be restored in
+  one click.
+
+Safe delete is available from an archived row's context menu or `⋯` menu. A confirmation dialog
+precedes it. The operation removes the conversation from every sidebar section and stores a
+restorable browser-local tombstone; it does not call a Host delete API and does not alter the session
+record on disk. Restoring puts the conversation back in its original section.
+
 ### Search and view state
 
 - Full-width search row filters loaded conversations by title, project name or directory basename;
   matching groups auto-expand; `Esc` clears and collapses it.
 - Everything view-related is stored in `localStorage` under `dsh.sidebarSections.*`: collapse
-  state, grouping/sort, per-project sort overrides, drag order and the last-used rail state.
-  Host data (pin/archive sets, session titles) is never duplicated locally.
+  state, grouping/sort, per-project sort overrides, drag order, Archived visibility and the
+  safe-delete list. Host data (pin/archive sets, session titles) is never duplicated locally.
 
 ## Install
 
@@ -280,7 +294,7 @@ keep the browser half dependency-free and platform-table-only, never declare chi
 
 ## Testing
 
-`scripts/check.mjs` is a zero-dependency Node suite (63 checks) covering:
+`scripts/check.mjs` is a zero-dependency Node suite (67 checks) covering:
 
 - package manifest, exports, `files`, bundle patch, localized display metadata, icon bounds, and
   platform-only `require`s (plus the “no hand-copied SVG paths” reuse rule);
@@ -317,8 +331,11 @@ layout, and the pre-stable Host UI beyond the contracts above.
 
 - **Section-scoped grouping/order only.** The shipped global Group by/Order by modes are replaced
   by per-section choices; Workspace-tree nesting under ancestor folders is not reproduced.
-- **Archived is permanent.** The fourth section is always rendered (with an empty hint) and archived
-  rows never mix into Projects/Recent.
+- **Archived can be hidden.** Settings can hide the fourth section; archived rows never mix into
+  Projects/Recent and stay in the Host while hidden.
+- **Safe delete is not a disk purge.** It only removes the conversation from the sidebar and keeps a
+  restorable record; the Host session log remains on disk. Permanent removal needs a Host-level
+  delete capability.
 - **Manual scope.** Drag works inside one list/group at a time (no cross-project move). Outside real
   Workspace groups the order lives in browser storage rather than Host data.
 - **Local filter only.** Search matches loaded titles/project names; the Host's message-content

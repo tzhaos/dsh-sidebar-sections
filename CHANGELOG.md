@@ -4,6 +4,28 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-10-18
+
+### Added
+
+- Plugin settings tab under **Settings → Built-in plugins → Sidebar sections**.
+  - Toggle the Archived section on or off; the setting persists browser-locally.
+  - List conversations removed with safe delete and restore them with one click.
+- Safe delete for archived conversations: a confirmation dialog removes the conversation from every
+  sidebar section and records a restorable browser-local tombstone. The Host record and session log
+  are left untouched.
+- The open conversation is protected from safe delete.
+
+### Changed
+
+- Archived rows now expose the safe-delete entry in their context and overflow menus.
+
+### Verified
+
+- `node scripts/check.mjs`: 67 checks green (settings toggle, safe delete, restore, current-session
+  protection and the existing suite).
+- Safe delete is intentionally a sidebar-level removal, not a disk purge; see Known limitations.
+
 ## [2.2.4] - 2026-10-18
 
 ### Fixed
