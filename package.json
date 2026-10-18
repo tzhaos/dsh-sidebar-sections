@@ -55,5 +55,13 @@
     "archived",
     "projects",
     "ui"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tzhaos/dsh-sidebar-sections.git"
+  },
+  "homepage": "https://github.com/tzhaos/dsh-sidebar-sections#readme",
+  "bugs": {
+    "url": "https://github.com/tzhaos/dsh-sidebar-sections/issues"
+  }
 }

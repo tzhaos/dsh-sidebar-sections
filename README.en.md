@@ -12,7 +12,9 @@ menus, drag ordering, context menus, safe delete, plugin settings and file-manag
 ![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
 ![Checks](https://img.shields.io/badge/checks-67-brightgreen)
 
-![Sidebar sections, section menu and project menu](docs/screenshot.png)
+![dsh-sidebar-sections 2.3.0: four sidebar sections, section menu and project menu](docs/screenshot.png)
+
+*Image notes: left is the four-section Pinned / Projects / Recent / Archived sidebar; middle is the section menu for grouping and ordering; right is the project menu with reveal, rename and delete actions. The screenshot reflects the current 2.3.0 version.*
 
 ## Table of contents
 
@@ -258,9 +260,9 @@ Harness client APIs are explicitly pre-stable. After a DSH upgrade, rerun
 
 ## Development
 
-This plugin is its own Git repository. The parent collection folder is just a
-workspace that may contain several independent plugin repositories; this
-repository owns its CI, editor settings, and contribution rules.
+This plugin is one package inside the `dsh-plugins` monorepo. The root owns shared
+CI, editor settings and the development installer; this package owns its manifest,
+bundle, tests, docs and changelog.
 
 ```
 dsh-sidebar-sections/         # repository root
@@ -272,8 +274,6 @@ dsh-sidebar-sections/         # repository root
 ├── locale/                   # plugin-manager title/description (en, zh)
 ├── docs/screenshot.png       # README screenshot
 ├── scripts/check.mjs         # zero-dependency verification suite
-├── .github/workflows/check.yml  # CI: node scripts/check.mjs
-├── .editorconfig / .gitattributes / .gitignore
 ├── README.md / README.en.md
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md

@@ -4,17 +4,16 @@ Thanks for taking the time to improve `dsh-sidebar-sections`.
 
 ## Repository scope
 
-This repository is the plugin itself. Its parent folder is only a collection
-workspace that can contain several independent plugin repositories; it is not
-where this plugin's CI, editor settings, or contribution rules live.
+This directory is one package inside the `dsh-plugins` monorepo.
 
 - The plugin is a self-contained DSH bundle: `package.json`, `cordis.patch.yml`,
   `index.js`, `client.js`, `icon.svg`, `locale/`, `README.md`, `README.en.md`,
   `CHANGELOG.md`, `LICENSE`, `scripts/check.mjs`, and `docs/`.
-- Repository configuration also lives here: `.github/workflows/check.yml`,
-  `.editorconfig`, `.gitattributes`, `.gitignore`, and this file.
-- Scratch or research folders outside the plugin directory are not part of this
-  repository and must never be shipped.
+- Repository-level CI, editor settings and installation scripts live at the
+  monorepo root. This package owns its manifest, bundle, tests, docs and this
+  contribution guide.
+- Scratch or research folders outside the package directory are not part of the
+  monorepo and must never be shipped.
 
 ## Ground rules
 
@@ -40,7 +39,7 @@ Run the zero-dependency suite from the repository root before sending a change:
 node scripts/check.mjs
 ```
 
-CI (`.github/workflows/check.yml`) runs the same command on every push and pull
+The monorepo CI runs `node scripts/check-all.mjs`, which includes this suite on every push and pull
 request.
 
 ## Documentation
