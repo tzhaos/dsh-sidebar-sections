@@ -937,12 +937,12 @@ await check('project menu opens rename/delete dialog requests', () => {
   dispatch(harness, findButton(findProject(), t, 'actions.workspace.aria', { name: 'Alpha project' }), 'onClick', syntheticEvent())
   const items = findAll(findOne(harness.tree, (element) => element.props?.role === 'menu'), (element) => element.type === 'button')
   assertEqual(items.map(textOf), [
-    t('sort.manual'), t('sort.updated'), t('rename'), t('delete.workspace'),
+    t('sort.default'), t('sort.manual'), t('sort.updated'), t('rename'), t('delete.workspace'),
   ], 'project menu items')
-  items[2].props.onClick()
+  items[3].props.onClick()
   assertEqual(request.getSnapshot().kind, 'rename', 'workspace rename request')
   const reopened = findAll(findOne(harness.tree, (element) => element.props?.role === 'menu'), (element) => element.type === 'button')
-  reopened[3].props.onClick()
+  reopened[4].props.onClick()
   assertEqual(request.getSnapshot().kind, 'delete', 'workspace delete request')
 })
 
@@ -1000,9 +1000,9 @@ await check('right-clicking a project row opens its sort/rename menu', () => {
   const menu = findOne(harness.tree, (element) => element.props?.role === 'menu')
   const items = findAll(menu, (element) => element.type === 'button')
   assertEqual(items.map(textOf), [
-    t('sort.manual'), t('sort.updated'), t('rename'), t('delete.workspace'),
+    t('sort.default'), t('sort.manual'), t('sort.updated'), t('rename'), t('delete.workspace'),
   ], 'project context menu items')
-  items[0].props.onClick()
+  items[1].props.onClick()
   const stored = JSON.parse(browserWindow.localStorage.getItem('dsh.sidebarSections.projectSorts') ?? '{}')
   assertEqual(stored.w1, 'manual', 'project sort override persisted')
   dispatch(harness, harness.tree, 'onContextMenu', syntheticEvent({
@@ -1012,9 +1012,65 @@ await check('right-clicking a project row opens its sort/rename menu', () => {
   }))
   const reopened = findAll(findOne(harness.tree, (element) => element.props?.role === 'menu'),
     (element) => element.type === 'button')
-  reopened[2].props.onClick()
+  reopened[3].props.onClick()
   const overlay = registrations.find((entry) => entry.options.name === 'shell.overlay')
   assertEqual(overlay.options.inject().hooks.request.getSnapshot().kind, 'rename', 'context menu opens rename dialog')
+})
+
+await check('project sort override can be reset to the section order', () => {
+  const { harness, t, browserWindow } = scenario()
+  const project = findOne(harness.tree, (element) => isProjectRow(element) && element.props['aria-label'] === 'Alpha project')
+  const anchorButton = () => findButton(
+    findOne(harness.tree, (element) => isProjectRow(element) && element.props['aria-label'] === 'Alpha project'),
+    t,
+    'actions.workspace.aria',
+    { name: 'Alpha project' },
+  )
+  assert(project, 'project row present')
+  dispatch(harness, anchorButton(), 'onClick', syntheticEvent())
+  let menu = findOne(harness.tree, (element) => element.props?.role === 'menu')
+  findAll(menu, (element) => element.type === 'button')[1].props.onClick()
+  harness.rerender()
+  let stored = JSON.parse(browserWindow.localStorage.getItem('dsh.sidebarSections.projectSorts') ?? '{}')
+  assertEqual(stored.w1, 'manual', 'override set')
+  dispatch(harness, anchorButton(), 'onClick', syntheticEvent())
+  menu = findOne(harness.tree, (element) => element.props?.role === 'menu')
+  findAll(menu, (element) => element.type === 'button')[0].props.onClick()
+  harness.rerender()
+  stored = JSON.parse(browserWindow.localStorage.getItem('dsh.sidebarSections.projectSorts') ?? '{}')
+  assertEqual(stored.w1, undefined, 'override cleared')
+})
+
+await check('keyboard opens the context menu on a row and a section heading', () => {
+  const { harness, t } = scenario()
+  const row = findSessionRow(harness.tree, t, 'Alpha talk')
+  dispatch(harness, row, 'onKeyDown', syntheticEvent({ key: 'ContextMenu', shiftKey: false }))
+  assert(String(harness.tree.props.className).includes('dshss-menuActive'), 'row context menu opened')
+  let menu = findOne(harness.tree, (element) => element.props?.role === 'menu')
+  assertEqual(findAll(menu, (element) => element.type === 'button').length, 5, 'row context menu items')
+  findAll(menu, (element) => element.type === 'button')[0].props.onClick()
+  harness.rerender()
+  assert(!String(harness.tree.props.className).includes('dshss-menuActive'), 'row context menu closed')
+  const header = findOne(harness.tree, (element) => element.props?.className === 'dshss-sectionHeader'
+    && element.props['data-section'] === 'pinned')
+  dispatch(harness, header, 'onKeyDown', syntheticEvent({ key: 'F10', shiftKey: true }))
+  assert(String(harness.tree.props.className).includes('dshss-menuActive'), 'section context menu opened')
+  menu = findOne(harness.tree, (element) => element.props?.role === 'menu')
+  assertEqual(findAll(menu, (element) => element.type === 'button').map(textOf),
+    [t('sort.manual'), t('sort.updated')], 'pinned section context menu')
+})
+
+await check('dragging is disabled while a filter narrows the list', () => {
+  const { harness, t } = scenario()
+  openSectionMenu(harness, t, 'section.recent')
+  pickSectionItem(harness, t, 'section.recent', t('sort.manual'))
+  const row = findAll(findSection(harness.tree, t, 'section.recent'), isSessionRow)[0]
+  assert(row.props.draggable === true, 'draggable while unfiltered')
+  dispatch(harness, findButton(harness.tree, t, 'filter.label'), 'onClick', syntheticEvent())
+  const input = findOne(harness.tree, (element) => element.type === 'input')
+  dispatch(harness, input, 'onChange', syntheticEvent({ target: { value: 'a' } }))
+  const filtered = findAll(findSection(harness.tree, t, 'section.recent'), isSessionRow)[0]
+  assert(filtered.props.draggable !== true, 'static while filtering')
 })
 
 await check('right-clicking a section heading opens its section menu', () => {
@@ -1039,6 +1095,7 @@ function hoverTarget(kind, dataset, rect = { right: 260, left: 20, top: 120 }) {
   const node = { dataset, getBoundingClientRect: () => rect }
   return {
     closest(selector) {
+      if (selector.includes('dshss-rowActions')) return null
       const project = selector.includes('dshss-projectRow')
       const row = selector.includes('dshss-row')
       if (project && row) return kind === 'row' ? node : kind === 'project' ? node : null
@@ -1064,10 +1121,10 @@ await check('context menus suppress the hover surface on the sidebar root', () =
   assert(!String(harness.tree.props.className).includes('dshss-menuActive'), 'closing clears the root')
 })
 
-await check('per-project manual sort reorders its own conversation list', () => {
+await check('per-project manual sort reorders its own conversation list', async () => {
   const base = createWorkspaceSnapshot()
   const stamp = base.items[0].createdAt
-  const { harness, t, calls, browserWindow } = scenario({
+  const { harness, t, calls, browserWindow, services } = scenario({
     useWorkspaces: (selector) => selector({
       items: [{
         workspaceId: 'w1',
@@ -1116,6 +1173,25 @@ await check('per-project manual sort reorders its own conversation list', () => 
   const reorderCall = calls.at(-1)
   assert(reorderCall[0] === 'insertSessionBefore' && reorderCall[1] === 'w1' && reorderCall[2] === 's2',
     'Host order write dispatched')
+  // A rejected Host reorder must surface the localized notice, not vanish.
+  services.workspaces.insertSessionBefore = () => Promise.reject(new Error('host rejected'))
+  const rerenderedGroup = () => findOne(harness.tree, (element) => element.type === 'div'
+    && element.props?.className === 'dshss-group'
+    && element.props['aria-label'] === 'Alpha project')
+  let rowsNow = findAll(rerenderedGroup(), isSessionRow)
+  dispatch(harness, rowsNow[0], 'onDragStart', syntheticEvent({ dataTransfer: { setData() {}, effectAllowed: '' } }))
+  rowsNow = findAll(rerenderedGroup(), isSessionRow)
+  dispatch(harness, rowsNow[1], 'onDragOver', syntheticEvent({
+    clientY: 30,
+    currentTarget: { getBoundingClientRect: () => ({ top: 0, height: 32 }) },
+    dataTransfer: { dropEffect: '' },
+  }))
+  rowsNow = findAll(rerenderedGroup(), isSessionRow)
+  dispatch(harness, rowsNow[1], 'onDrop', syntheticEvent({}))
+  await settle()
+  harness.rerender()
+  assert(textOf(harness.tree).includes(t('toast.reorderFailed', { message: 'host rejected' })),
+    'reorder failure notice shown')
 })
 
 await check('local filter narrows rows and Escape clears it', () => {

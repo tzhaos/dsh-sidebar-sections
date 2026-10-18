@@ -117,6 +117,7 @@ window.__ModuleLoader__.load({
       'section.menu': '{name}的分区操作',
       'sort.label': '排序方式',
       'sort.manual': '手动排序',
+      'sort.default': '跟随分区排序',
       'sort.updated': '最近更新',
       'group.label': '分组方式',
       'group.byProject': '按项目',
@@ -153,6 +154,8 @@ window.__ModuleLoader__.load({
       'actions.pin': '置顶会话',
       'actions.unpin': '取消置顶',
       'toast.sessionIdCopied': 'Session ID 已复制',
+      'toast.reorderFailed': '调整排序失败：{message}',
+      'toast.reorderFailed': 'Could not reorder: {message}',
       'toast.sessionIdCopyFailed': '复制失败，请重试',
       'toast.archivedNotOpenable': '已归档对话暂时无法查看，请取消归档后查看',
       'toast.pinFailed': '置顶失败，请稍后重试',
@@ -229,6 +232,7 @@ window.__ModuleLoader__.load({
       'section.menu': '{name} section actions',
       'sort.label': 'Sort chats by',
       'sort.manual': 'Manual order',
+      'sort.default': 'Use section order',
       'sort.updated': 'Last updated',
       'group.label': 'Group chats by',
       'group.byProject': 'By project',
@@ -265,6 +269,8 @@ window.__ModuleLoader__.load({
       'actions.pin': 'Pin session',
       'actions.unpin': 'Unpin session',
       'toast.sessionIdCopied': 'Session ID copied',
+      'toast.reorderFailed': '调整排序失败：{message}',
+      'toast.reorderFailed': 'Could not reorder: {message}',
       'toast.sessionIdCopyFailed': 'Copy failed, please retry',
       'toast.archivedNotOpenable': 'Archived conversations cannot be opened until restored',
       'toast.pinFailed': 'Pin failed, please retry',
@@ -1209,6 +1215,12 @@ window.__ModuleLoader__.load({
 /* While any menu is open the triggering row must not keep its hover surface. */
 .dshss-root.dshss-menuActive .dshss-row:hover,
 .dshss-root.dshss-menuActive .dshss-projectRow:hover { background: transparent; }
+.dshss-root.dshss-menuActive .dshss-row:hover .dshss-time { display: inline; }
+.dshss-root.dshss-menuActive .dshss-row:hover .dshss-pinMark { display: inline-flex; }
+.dshss-root.dshss-menuActive .dshss-row:hover .dshss-rowActions,
+.dshss-root.dshss-menuActive .dshss-projectRow:hover .dshss-rowActions,
+.dshss-root.dshss-menuActive .dshss-row.dshss-menuOpen .dshss-rowActions,
+.dshss-root.dshss-menuActive .dshss-projectRow.dshss-menuOpen .dshss-rowActions { display: none; }
 .dshss-row[draggable="true"] { cursor: grab; }
 .dshss-row.dshss-drop-before { box-shadow: inset 0 2px 0 var(--dsw-alias-label-primary); }
 .dshss-row.dshss-drop-after { box-shadow: inset 0 -2px 0 var(--dsw-alias-label-primary); }
@@ -1415,6 +1427,7 @@ window.__ModuleLoader__.load({
     function SessionRow({
       node, selected, panelActive, onOpen, onTogglePin, onArchive, onMenuAction, t,
       canDrag, dropHint, onDragStart, onDragOver, onDrop, onDragEnd, onMenuOpenChange,
+      onContextMenuKey,
     }) {
       const [menuOpen, setMenuOpen] = useState(false)
       const showStatus = node.status.state !== 'idle'
@@ -1451,6 +1464,7 @@ window.__ModuleLoader__.load({
         tabIndex: 0,
         onClick: onOpen,
         onKeyDown: (event) => {
+          if (onContextMenuKey !== undefined && onContextMenuKey(event)) return
           if (event.key !== 'Enter' && event.key !== ' ') return
           event.preventDefault()
           onOpen()
@@ -1527,8 +1541,8 @@ window.__ModuleLoader__.load({
      */
     function ProjectGroup({
       group, expanded, onToggle, onNewSession, onWorkspaceMenu, onSessionMenu,
-      onOpen, onTogglePin, onArchive, panelActive, rowDrag, sortMode, onSort, t,
-      onMenuOpenChange,
+      onOpen, onTogglePin, onArchive, panelActive, rowDrag, sortMode, sortOverride, onSort, t,
+      onMenuOpenChange, onContextMenuKey, rowContextKey,
     }) {
       const [menuOpen, setMenuOpen] = useState(false)
       const groupLabel = t('actions.workspace.aria', { name: group.label })
@@ -1545,6 +1559,7 @@ window.__ModuleLoader__.load({
           tabIndex: 0,
           onClick: onToggle,
           onKeyDown: (event) => {
+            if (onContextMenuKey !== undefined && onContextMenuKey(event)) return
             if (event.key !== 'Enter' && event.key !== ' ') return
             event.preventDefault()
             onToggle()
@@ -1577,6 +1592,7 @@ window.__ModuleLoader__.load({
           }, h(IconEllipsisOutlineRegular, { size: 16 })),
           items: [
             { type: 'label', id: 'project-sort', text: t('sort.label') },
+            { id: 'sort-default', label: t('sort.default') },
             { id: 'sort-manual', label: t('sort.manual') },
             { id: 'sort-updated', label: t('sort.updated') },
             { type: 'separator', id: 'project-separator' },
@@ -1588,9 +1604,12 @@ window.__ModuleLoader__.load({
               danger: true,
             },
           ],
-          selectedIds: [sortMode === 'manual' ? 'sort-manual' : 'sort-updated'],
+          selectedIds: [sortOverride === undefined
+            ? 'sort-default'
+            : sortMode === 'manual' ? 'sort-manual' : 'sort-updated'],
           onSelect: (id) => {
             setMenuOpen(false)
+            if (id === 'sort-default') { onSort('default'); return }
             if (id === 'sort-manual' || id === 'sort-updated') {
               onSort(id === 'sort-manual' ? 'manual' : 'updated')
               return
@@ -1612,6 +1631,7 @@ window.__ModuleLoader__.load({
                 onArchive: () => { onArchive(node) },
                 onMenuAction: (action) => { onSessionMenu(node, action) },
                 onMenuOpenChange,
+                onContextMenuKey: (event) => rowContextKey(event, node.id),
                 ...rowDrag(node, group.nodes.map((entry) => entry.id)),
                 t,
               })))
@@ -1690,7 +1710,7 @@ window.__ModuleLoader__.load({
      * @param {object} props - title, count, expansion and action children.
      * @returns {object} the section header element.
      */
-    function SectionHeader({ sectionKey, title, count, collapsed, onToggle, children, t }) {
+    function SectionHeader({ sectionKey, title, count, collapsed, onToggle, children, t, onContextMenuKey }) {
       return h('div', {
         className: 'dshss-sectionHeader',
         role: 'button',
@@ -1700,6 +1720,7 @@ window.__ModuleLoader__.load({
         'aria-label': t(collapsed ? 'section.expand' : 'section.collapse', { name: title }),
         onClick: onToggle,
         onKeyDown: (event) => {
+          if (onContextMenuKey !== undefined && onContextMenuKey(event)) return
           if (event.key !== 'Enter' && event.key !== ' ') return
           event.preventDefault()
           onToggle()
@@ -1766,6 +1787,7 @@ window.__ModuleLoader__.load({
       const [notice, setNotice] = useState(null)
       const [hoverPreview, setHoverPreview] = useState(null)
       const inputRef = useRef(null)
+      const scrollRef = useRef(null)
       const hoverTimerRef = useRef(null)
 
       const loading = workspaceSnapshot.phase !== 'ready' || list.phase !== 'ready'
@@ -1803,6 +1825,17 @@ window.__ModuleLoader__.load({
       /** Show one transient inline notice. */
       const report = (message) => { setNotice(message) }
 
+      /** Scroll the list while a drag hovers near its top/bottom edge. */
+      const autoScrollDrag = (event) => {
+        if (dragState === null) return
+        const node = scrollRef.current
+        if (node === null || node === undefined) return
+        const rect = node.getBoundingClientRect()
+        const edge = 28
+        if (event.clientY < rect.top + edge) node.scrollTop -= 24
+        else if (event.clientY > rect.bottom - edge) node.scrollTop += 24
+      }
+
       /** Clear the pending row-hover dwell timer. */
       const cancelHoverTimer = () => {
         if (hoverTimerRef.current !== null) {
@@ -1812,6 +1845,9 @@ window.__ModuleLoader__.load({
       }
       /** Start the row-hover dwell that opens the project preview card. */
       const hoverRow = (event) => {
+        if (dragState !== null || contextMenu !== null) return
+        const actions = event.target?.closest?.('.dshss-rowActions')
+        if (actions !== null && actions !== undefined) return
         const projectRow = event.target?.closest?.('.dshss-projectRow[data-workspace]')
         if (projectRow !== null && projectRow !== undefined) {
           if (hoverPreview !== null && hoverPreview.kind === 'project' && hoverPreview.key === projectRow.dataset.workspace) return
@@ -1991,10 +2027,13 @@ window.__ModuleLoader__.load({
         return override === 'manual' || override === 'updated' ? override : sectionViews.projects.sort
       }
 
-      /** Persist one project group's sort override. */
+      /** Persist one project group's sort override; 'default' clears it. */
       const setProjectSort = (key, mode) => {
         setProjectSorts((previous) => {
-          const next = { ...previous, [projectOrderKey(key)]: mode }
+          const next = { ...previous }
+          const normalized = projectOrderKey(key)
+          if (mode === 'default') delete next[normalized]
+          else next[normalized] = mode
           writeProjectSorts(next)
           return next
         })
@@ -2031,7 +2070,12 @@ window.__ModuleLoader__.load({
         })
         // Real Workspace groups also persist the order on the Host.
         if (container.startsWith('project:') && workspaceId !== undefined) {
-          invoke(() => actions.moveSessionBefore(workspaceId, draggedId, beforeId), report, 'reorder session')
+          invoke(
+            () => actions.moveSessionBefore(workspaceId, draggedId, beforeId),
+            report,
+            'reorder session',
+            (error) => t('toast.reorderFailed', { message: messageOf(error) }),
+          )
         }
       }
 
@@ -2072,7 +2116,9 @@ window.__ModuleLoader__.load({
       }
 
       /** Drag props for one row inside a manual-sort container. */
-      const rowDrag = (container, enabled, workspaceId) => (node, order) => (enabled !== true || node.blank === true
+      const rowDrag = (container, enabled, workspaceId) => (node, order) => (enabled !== true
+        || node.blank === true
+        || filtering
         ? {}
         : {
           canDrag: true,
@@ -2127,6 +2173,7 @@ window.__ModuleLoader__.load({
         return {
           ...group,
           sort,
+          sortOverride: projectSorts[projectOrderKey(group.key)],
           nodes: sort === 'manual'
             ? applyManualOrder(
               orderNodes(group.nodes, 'manual'),
@@ -2217,6 +2264,7 @@ window.__ModuleLoader__.load({
           onTogglePin: () => { togglePin(node) },
           onArchive: () => { archiveNode(node) },
           onMenuAction: (action) => { runSessionMenu(node, action) },
+          onContextMenuKey: (event) => openContextMenuForKey(event, 'row', { sessionId: node.id }),
           ...drag(node, order),
           t,
         }))
@@ -2244,6 +2292,7 @@ window.__ModuleLoader__.load({
             onTogglePin: () => { togglePin(node) },
             onArchive: () => { archiveNode(node) },
             onMenuAction: (action) => { runSessionMenu(node, action) },
+          onContextMenuKey: (event) => openContextMenuForKey(event, 'row', { sessionId: node.id }),
             ...drag(node, order),
             t,
           }))
@@ -2252,6 +2301,7 @@ window.__ModuleLoader__.load({
           key: group.key === '' ? '__ungrouped__' : group.key,
           group: { ...group, currentId: sections.currentId },
           sortMode: group.sort,
+          sortOverride: group.sortOverride,
           onSort: (sort) => { setProjectSort(group.key, sort) },
           expanded: filtering ? true : collapsed[group.key] !== true,
           onToggle: () => { toggleGroup(group.key) },
@@ -2261,6 +2311,8 @@ window.__ModuleLoader__.load({
             else actions.deleteWorkspace(group.workspaceId, group.label)
           },
           onSessionMenu: runSessionMenu,
+          onContextMenuKey: (event) => openContextMenuForKey(event, 'project', { workspaceKey: projectOrderKey(group.key) }),
+          rowContextKey: (event, sessionId) => openContextMenuForKey(event, 'row', { sessionId }),
           onOpen: openNode,
           onTogglePin: togglePin,
           onArchive: archiveNode,
@@ -2288,6 +2340,7 @@ window.__ModuleLoader__.load({
           onTogglePin: () => { togglePin(node) },
           onArchive: () => { archiveNode(node) },
           onMenuAction: (action) => { runSessionMenu(node, action) },
+          onContextMenuKey: (event) => openContextMenuForKey(event, 'row', { sessionId: node.id }),
           ...drag(node, order),
           t,
         }))
@@ -2334,6 +2387,7 @@ window.__ModuleLoader__.load({
           onTogglePin: () => { togglePin(node) },
           onArchive: () => { archiveNode(node) },
           onMenuAction: (action) => { runSessionMenu(node, action) },
+          onContextMenuKey: (event) => openContextMenuForKey(event, 'row', { sessionId: node.id }),
           ...drag(node, order),
           t,
         }))
@@ -2347,6 +2401,7 @@ window.__ModuleLoader__.load({
             h('section', { key: 'pinned', className: 'dshss-section', 'aria-label': t('section.pinned') },
               h(SectionHeader, {
                 sectionKey: 'pinned',
+                onContextMenuKey: (event) => openContextMenuForKey(event, 'section', { section: 'pinned' }),
                 title: t('section.pinned'),
                 count: pinnedCount,
                 collapsed: !pinnedOpen,
@@ -2363,6 +2418,7 @@ window.__ModuleLoader__.load({
             h('section', { key: 'projects', className: 'dshss-section', 'aria-label': t('section.projects') },
               h(SectionHeader, {
                 sectionKey: 'projects',
+                onContextMenuKey: (event) => openContextMenuForKey(event, 'section', { section: 'projects' }),
                 title: t('section.projects'),
                 count: projectCount,
                 collapsed: !projectsOpen,
@@ -2385,6 +2441,7 @@ window.__ModuleLoader__.load({
             h('section', { key: 'recent', className: 'dshss-section', 'aria-label': t('section.recent') },
               h(SectionHeader, {
                 sectionKey: 'recent',
+                onContextMenuKey: (event) => openContextMenuForKey(event, 'section', { section: 'recent' }),
                 title: t('section.recent'),
                 count: recentCount,
                 collapsed: !recentOpen,
@@ -2407,6 +2464,7 @@ window.__ModuleLoader__.load({
             h('section', { key: 'archived', className: 'dshss-section', 'aria-label': t('section.archived') },
               h(SectionHeader, {
                 sectionKey: 'archived',
+                onContextMenuKey: (event) => openContextMenuForKey(event, 'section', { section: 'archived' }),
                 title: t('section.archived'),
                 count: archivedCount,
                 collapsed: !archivedOpen,
@@ -2434,6 +2492,8 @@ window.__ModuleLoader__.load({
 
       /** Open the same menu on right-click for rows, project rows and headings. */
       const openContextMenu = (event) => {
+        cancelHoverTimer()
+        setHoverPreview(null)
         const target = event.target
         const point = { x: event.clientX, y: event.clientY }
         const row = target?.closest?.('.dshss-row[data-session]')
@@ -2453,6 +2513,23 @@ window.__ModuleLoader__.load({
           event.preventDefault()
           setContextMenu({ kind: 'section', section: sectionHeader.dataset.section, point })
         }
+      }
+
+      /** Open the same context menu from the keyboard (ContextMenu / Shift+F10). */
+      const openContextMenuForKey = (event, kind, data) => {
+        if (event.key !== 'ContextMenu' && !(event.shiftKey === true && event.key === 'F10')) return false
+        event.preventDefault()
+        cancelHoverTimer()
+        setHoverPreview(null)
+        const rect = event.currentTarget?.getBoundingClientRect?.()
+        setContextMenu({
+          kind,
+          ...data,
+          point: rect === undefined || rect === null
+            ? { x: 0, y: 0 }
+            : { x: Math.max(8, rect.right - 8), y: rect.bottom - 4 },
+        })
+        return true
       }
 
       const contextMenuElement = (() => {
@@ -2481,14 +2558,18 @@ window.__ModuleLoader__.load({
           if (group === undefined) return null
           items.push(
             { type: 'label', id: 'project-sort', text: t('sort.label') },
+            { id: 'sort-default', label: t('sort.default') },
             { id: 'sort-manual', label: t('sort.manual') },
             { id: 'sort-updated', label: t('sort.updated') },
             { type: 'separator', id: 'project-separator' },
             { id: 'rename', label: t('rename'), icon: h(IconEditOutlineRegular, { size: 14 }) },
             { id: 'delete', label: t('delete.workspace'), icon: h(IconTrashOutlineRegular, { size: 14 }), danger: true },
           )
-          selectedIds.push(group.sort === 'manual' ? 'sort-manual' : 'sort-updated')
+          selectedIds.push(group.sortOverride === undefined
+            ? 'sort-default'
+            : group.sort === 'manual' ? 'sort-manual' : 'sort-updated')
           onSelect = (id) => {
+            if (id === 'sort-default') { setProjectSort(group.key, 'default'); return }
             if (id === 'sort-manual' || id === 'sort-updated') {
               setProjectSort(group.key, id === 'sort-manual' ? 'manual' : 'updated')
               return
@@ -2599,6 +2680,7 @@ window.__ModuleLoader__.load({
         onMouseOver: hoverRow,
         onMouseOut: leaveRow,
         onContextMenu: openContextMenu,
+        onDragOver: autoScrollDrag,
       }, style,
         searchRow,
         hoverCard,
@@ -2613,7 +2695,7 @@ window.__ModuleLoader__.load({
               onClick: () => { setNotice(null) },
             }, h(IconCloseFillRegular, { size: 12 })))
           : null,
-        h('div', { className: 'dshss-scroll' }, sectionBody))
+        h('div', { className: 'dshss-scroll', ref: scrollRef }, sectionBody))
     }
 
     // ---------------------------------------------------------------------

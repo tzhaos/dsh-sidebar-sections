@@ -58,9 +58,9 @@ their direct action.
 | Area | Behavior |
 |---|---|
 | Pinned | Host pin set, most recently pinned first. Hovering or keyboard-focusing a row reveals **Unpin**, and a resting 📌 marks pinned rows. Rows keep the shipped conversation UI (status, title, time, actions). The section collapses from its right-side chevron; its `⋯` menu offers only the sort order (**Manual order** / **Last updated**). |
-| Projects | One group per registered Workspace, in Host order, with unpinned and unarchived conversations nested inside. Groups collapse (browser-local, remembered) and default to expanded. Hovering a project reveals **New session** and a **⋯** menu with **Rename workspace** / **Delete workspace**. The folder icon on a project row stays a folder (open/closed); clicking the row itself toggles it. The section header carries `＋` (add workspace) and, rightmost, `⋯`: **Group chats by** (By project / In one list) and **Sort chats by** (Manual order / Last updated). Each project row's `⋯` (or right-click) menu additionally carries its own **Sort chats by** override, so a single project can use manual/last-updated independently of the section. |
+| Projects | One group per registered Workspace, in Host order, with unpinned and unarchived conversations nested inside. Groups collapse (browser-local, remembered) and default to expanded. Hovering a project reveals **New session** and a **⋯** menu with **Rename workspace** / **Delete workspace**. The folder icon on a project row stays a folder (open/closed); clicking the row itself toggles it. The section header carries `＋` (add workspace) and, rightmost, `⋯`: **Group chats by** (By project / In one list) and **Sort chats by** (Manual order / Last updated). Each project row's `⋯` (or right-click) menu additionally carries its own **Sort chats by** choice — **Use section order** (default), Manual order, or Last updated — so one project can override the section and reset back later. |
 | Recent | Unpinned conversations across all projects, newest activity first. Eight rows initially, with **Show more** in steps of twenty. Rows show title and recency only. The section header carries `✎` (new session in the Host default workspace) and, rightmost, `⋯`: the same **Group chats by** / **Sort chats by** choices (By project / In one list, Manual order / Last updated). |
-| Context menus | Right-click a conversation row, a project row, or any section heading to open the same menu that its `⋯` button opens (row actions / project sort + workspace actions / section grouping and sort), positioned at the pointer. While a menu is open the triggering row drops its hover surface. |
+| Context menus | Right-click a conversation row, a project row, or any section heading to open the same menu that its `⋯` button opens (row actions / project sort + workspace actions / section grouping and sort), positioned at the pointer. The same menus open from the keyboard with the Context Menu key or `Shift+F10`. While such a menu is open the triggering row drops its entire hover surface (background, time swap and action reveal). |
 | Project hover | Hovering a project row for a moment shows a preview card: folder icon + project name, the visible conversation count, and the canonical directory path. |
 | Every conversation | Hovering or keyboard-focusing a row reveals **archive/unarchive**, **pin/unpin**, and the **⋯** row menu: pin/unpin, rename session, fork session, archive/unarchive, copy Session ID. Hovering the row for a moment opens a preview card with the conversation title, its owning project, and the time. |
 | Search row | A full-width filter control on its own row above the sections (conversation title or project name; `Esc` clears and collapses it). |
@@ -155,11 +155,12 @@ is the `remove_bundle` operation.
   group **By project** or **In one list**; all choices are remembered browser-locally.
 - **Manual ordering by drag**: in any section set to **Manual order** (or any single project whose
   row menu is set to Manual order), rows become draggable — drag a row onto another row's
-  upper/lower half to insert it before/after; a line marks the drop position. The resulting order
-  is stored browser-locally (`dsh.sidebarSections.manualOrder`), and real Workspace groups also
-  persist it to the Host through `workspaces.insertSessionBefore`. Project sort overrides are
-  stored in `dsh.sidebarSections.projectSorts`. Blank draft rows and cross-group moves are not
-  draggable.
+  upper/lower half to insert it before/after; a line marks the drop position and the list
+  auto-scrolls when the pointer nears its top/bottom edge. The resulting order is stored
+  browser-locally (`dsh.sidebarSections.manualOrder`), and real Workspace groups also persist it
+  to the Host through `workspaces.insertSessionBefore`; a rejected Host write shows an inline
+  notice. Project sort overrides are stored in `dsh.sidebarSections.projectSorts`. Blank draft
+  rows, cross-group moves and drag-while-filtering are disabled.
 - **Right-click menus**: right-click any row, project row, or section heading to open the same
   actions menu as its `⋯` button.
 - **Section shortcuts**: `＋` next to Projects adds a workspace through the Host directory picker;
@@ -232,7 +233,7 @@ and re-check the live UI; a changed slot contract may require updating this plug
 
 ## 6. Verification
 
-`scripts/check.mjs` is a zero-dependency suite (53 checks) that runs with plain Node:
+`scripts/check.mjs` is a zero-dependency suite (56 checks) that runs with plain Node:
 
 ```sh
 node scripts/check.mjs
@@ -267,7 +268,11 @@ It validates:
   context menu is open the root carries `dshss-menuActive`, which cancels the hover surface;
 - hover previews: the conversation card renders its title/project/time and clears on leave; the
   project card renders name/visible-count/path from the row's data attributes;
-- drag manual ordering also covers an upper-half (insert-before) drop and refuses blank draft rows;
+- drag manual ordering also covers an upper-half (insert-before) drop, refuses blank draft rows,
+  is disabled while a filter narrows the list, and surfaces a localized notice when the Host
+  reorder write rejects;
+- per-project sort can be reset to **Use section order**;
+- the Context Menu key / Shift+F10 opens row, project and section context menus;
 - static guard: menu-open styles never paint a hover background;
 - rendered rows/buttons carry no native `title` tooltips;
 - rows expose their owning project for the hover preview card;

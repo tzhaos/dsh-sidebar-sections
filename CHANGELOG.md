@@ -4,6 +4,34 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-10-18
+
+Audit pass: interaction polish, keyboard access and failure handling.
+
+### Added
+
+- Keyboard context menus: the Context Menu key or Shift+F10 opens the row / project / section
+  menu at the focused element.
+- Per-project sort now includes **Use section order** as the reset option (and shows as checked
+  when no override is stored).
+- Drag auto-scroll: while dragging, nearing the list's top/bottom edge scrolls the conversation
+  list.
+- Localized notice when the Host reorder write (`insertSessionBefore`) rejects.
+
+### Fixed
+
+- Hover previews no longer open while hovering the row action strip, during a drag, or with a
+  context menu open; opening a context menu also cancels a pending preview.
+- Right-click context menus now clear the row's entire hover surface (background, time swap and
+  action strip), not just the background.
+- Dragging is disabled while a filter narrows the list, so a partial view cannot silently reorder
+  hidden rows.
+
+### Verified
+
+- `node scripts/check.mjs`: 56 checks green (project sort reset, keyboard context menus, filtered
+  drag guard, Host reorder failure notice, plus the previous coverage).
+
 ## [1.7.1] - 2026-10-18
 
 Test-suite cleanup and a small context-menu fix.
