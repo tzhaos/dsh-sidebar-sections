@@ -264,6 +264,8 @@ function createFakeReact() {
 /** Fake browser window with in-memory localStorage. */
 function createFakeWindow() {
   const storage = new Map()
+  const timers = new Map()
+  let nextTimer = 0
   return {
     localStorage: {
       getItem: (key) => (storage.has(key) ? storage.get(key) : null),
@@ -272,8 +274,17 @@ function createFakeWindow() {
     },
     setInterval: () => 0,
     clearInterval: () => {},
-    setTimeout: () => 0,
-    clearTimeout: () => {},
+    setTimeout: (callback) => {
+      nextTimer += 1
+      timers.set(nextTimer, callback)
+      return nextTimer
+    },
+    clearTimeout: (id) => { timers.delete(id) },
+    __runTimers: () => {
+      const pending = [...timers.values()]
+      timers.clear()
+      for (const callback of pending) callback()
+    },
     addEventListener: () => {},
     removeEventListener: () => {},
     innerWidth: 1440,
@@ -918,14 +929,6 @@ await check('opening conversations and starting project sessions dispatch naviga
   assertEqual(calls.at(-1), ['startSession', 'w1'], 'start session')
 })
 
-await check('add workspace opens the picker, adopts the path and starts a session', async () => {
-  const { harness, t, calls } = scenario()
-  dispatch(harness, findButton(harness.tree, t, 'toolbar.add'), 'onClick', syntheticEvent())
-  await settle()
-  assertEqual(calls.at(-2), ['createWorkspace', 'D:\\new'], 'adopt path')
-  assertEqual(calls.at(-1), ['startSession', 'w3'], 'start after adopt')
-})
-
 await check('project menu opens rename/delete dialog requests', () => {
   const { harness, t, registrations } = scenario()
   const overlay = registrations.find((entry) => entry.options.name === 'shell.overlay')
@@ -971,8 +974,24 @@ await check('right-clicking a conversation row opens its action menu', () => {
   assertEqual(calls.at(-1), ['archiveSession', 's2', false], 'context menu dispatches archive')
 })
 
+await check('archived rows right-click to an unarchive action without pin', () => {
+  const { harness, t, calls } = scenario()
+  dispatch(harness, harness.tree, 'onContextMenu', syntheticEvent({
+    target: contextTarget('row', { session: 's4' }),
+    clientX: 40,
+    clientY: 80,
+  }))
+  const menu = findOne(harness.tree, (element) => element.props?.role === 'menu')
+  const items = findAll(menu, (element) => element.type === 'button')
+  assertEqual(items.map(textOf), [
+    t('menu.renameSession'), t('menu.forkSession'), t('menu.unarchiveSession'), t('menu.sessionId'),
+  ], 'archived row context menu items')
+  items[2].props.onClick()
+  assertEqual(calls.at(-1), ['unarchiveSession', 's4'], 'context menu unarchives')
+})
+
 await check('right-clicking a project row opens its sort/rename menu', () => {
-  const { harness, t, browserWindow } = scenario()
+  const { harness, t, browserWindow, registrations } = scenario()
   dispatch(harness, harness.tree, 'onContextMenu', syntheticEvent({
     target: contextTarget('project', { workspace: 'w1' }),
     clientX: 40,
@@ -986,6 +1005,16 @@ await check('right-clicking a project row opens its sort/rename menu', () => {
   items[0].props.onClick()
   const stored = JSON.parse(browserWindow.localStorage.getItem('dsh.sidebarSections.projectSorts') ?? '{}')
   assertEqual(stored.w1, 'manual', 'project sort override persisted')
+  dispatch(harness, harness.tree, 'onContextMenu', syntheticEvent({
+    target: contextTarget('project', { workspace: 'w1' }),
+    clientX: 40,
+    clientY: 80,
+  }))
+  const reopened = findAll(findOne(harness.tree, (element) => element.props?.role === 'menu'),
+    (element) => element.type === 'button')
+  reopened[2].props.onClick()
+  const overlay = registrations.find((entry) => entry.options.name === 'shell.overlay')
+  assertEqual(overlay.options.inject().hooks.request.getSnapshot().kind, 'rename', 'context menu opens rename dialog')
 })
 
 await check('right-clicking a section heading opens its section menu', () => {
@@ -1005,13 +1034,20 @@ await check('right-clicking a section heading opens its section menu', () => {
   assertEqual(views.recent.sort, 'manual', 'section context menu persists sort')
 })
 
-await check('project rows carry their own hover preview metadata', () => {
-  const { harness } = scenario()
-  const project = findOne(harness.tree, (element) => isProjectRow(element) && element.props['aria-label'] === 'Alpha project')
-  assertEqual(project.props['data-project-label'], 'Alpha project', 'hover label')
-  assertEqual(project.props['data-project-path'], 'D:\\alpha', 'hover path')
-  assertEqual(String(project.props['data-project-count']), '1', 'hover visible chat count')
-})
+/** Fake hover target that reports one row owner and a stable rect. */
+function hoverTarget(kind, dataset, rect = { right: 260, left: 20, top: 120 }) {
+  const node = { dataset, getBoundingClientRect: () => rect }
+  return {
+    closest(selector) {
+      const project = selector.includes('dshss-projectRow')
+      const row = selector.includes('dshss-row')
+      if (project && row) return kind === 'row' ? node : kind === 'project' ? node : null
+      if (project) return kind === 'project' ? node : null
+      if (row) return kind === 'row' ? node : null
+      return null
+    },
+  }
+}
 
 await check('context menus suppress the hover surface on the sidebar root', () => {
   const { harness } = scenario()
@@ -1179,6 +1215,44 @@ await check('section headings put the chevron on the right and unify the ⋯ pos
   }
 })
 
+await check('manual drag inserts before when dropped on the upper half', () => {
+  const { harness, t } = scenario()
+  openSectionMenu(harness, t, 'section.recent')
+  pickSectionItem(harness, t, 'section.recent', t('sort.manual'))
+  let rows = findAll(findSection(harness.tree, t, 'section.recent'), isSessionRow)
+  const initial = rows.map(rowTitle)
+  assert(initial.length >= 3, 'enough rows for a before-drop')
+  dispatch(harness, rows[2], 'onDragStart', syntheticEvent({ dataTransfer: { setData() {}, effectAllowed: '' } }))
+  rows = findAll(findSection(harness.tree, t, 'section.recent'), isSessionRow)
+  dispatch(harness, rows[0], 'onDragOver', syntheticEvent({
+    clientY: 5,
+    currentTarget: { getBoundingClientRect: () => ({ top: 0, height: 32 }) },
+    dataTransfer: { dropEffect: '' },
+  }))
+  rows = findAll(findSection(harness.tree, t, 'section.recent'), isSessionRow)
+  dispatch(harness, rows[0], 'onDrop', syntheticEvent({}))
+  const after = findAll(findSection(harness.tree, t, 'section.recent'), isSessionRow).map(rowTitle)
+  assertEqual(after, [initial[2], initial[0], initial[1], ...initial.slice(3)], 'inserted before the drop target')
+})
+
+await check('blank draft rows are not draggable even in manual mode', () => {
+  const { harness, t } = scenario()
+  openSectionMenu(harness, t, 'section.projects')
+  pickSectionItem(harness, t, 'section.projects', t('sort.manual'))
+  const projects = findSection(harness.tree, t, 'section.projects')
+  const blank = findAll(projects, isSessionRow).find((row) => rowTitle(row) === t('session.new'))
+  assert(blank, 'blank draft row present')
+  assert(blank.props.draggable !== true, 'blank draft row is not draggable')
+  const alpha = findAllSessionRows(harness.tree, 'Alpha talk')[0]
+  assert(alpha.props.draggable === true, 'regular manual row is draggable')
+})
+
+await check('menu interaction never paints a hover background', () => {
+  assert(!/\.dshss-row\.dshss-menuOpen\s*\{[^}]*background/.test(clientSource), 'row menu-open rule sets no background')
+  assert(!/\.dshss-projectRow\.dshss-menuOpen\s*\{[^}]*background/.test(clientSource), 'project menu-open rule sets no background')
+  assert(clientSource.includes('.dshss-root.dshss-menuActive .dshss-row:hover'), 'menu-active hover suppression rule present')
+})
+
 await check('section overflow menus expose per-section choices', () => {
   const { harness, t, browserWindow } = scenario()
   for (const key of ['section.pinned', 'section.archived']) {
@@ -1251,12 +1325,6 @@ await check('updated sort rows are not draggable', () => {
   assert(row.props.draggable !== true, 'updated order rows are static')
 })
 
-await check('section headings cover all four sections', () => {
-  const { harness, t } = scenario()
-  const headings = findAll(harness.tree, (element) => element.type === 'h2').map(textOf)
-  assertEqual(headings, [t('section.pinned'), t('section.projects'), t('section.recent'), t('section.archived')], 'four headings')
-})
-
 await check('rows and buttons render no native title tooltips', () => {
   const { harness } = scenario()
   const native = findAll(harness.tree, (element) => element.props !== undefined && element.props.title !== undefined)
@@ -1283,10 +1351,48 @@ await check('recent by-project mode groups rows under project headings', () => {
   assert(findAll(recent, isSessionRow).map(rowTitle).includes('Alpha talk'), 'rows stay listed')
 })
 
-await check('conversation rows expose their owning project to the hover preview', () => {
-  const { harness, t } = scenario()
+await check('conversation hover card shows title, project and time, then clears', () => {
+  const { harness, t, browserWindow } = scenario()
   const row = findAllSessionRows(harness.tree, 'Alpha talk')[0]
-  assertEqual(row.props['data-project'], 'Alpha project', 'row carries the project name for the hover preview')
+  const dataset = {
+    session: row.props['data-session'],
+    title: row.props['data-title'],
+    project: row.props['data-project'],
+    time: row.props['data-time'],
+  }
+  assertEqual(dataset.project, 'Alpha project', 'row exposes the project name')
+  dispatch(harness, harness.tree, 'onMouseOver', syntheticEvent({ target: hoverTarget('row', dataset) }))
+  browserWindow.__runTimers()
+  harness.rerender()
+  const card = findOne(harness.tree, (element) => element.props?.className === 'dshss-hoverCard')
+  assert(textOf(card).includes('Alpha talk'), 'title in hover card')
+  assert(textOf(card).includes('Alpha project'), 'project in hover card')
+  dispatch(harness, harness.tree, 'onMouseOut', syntheticEvent({ target: hoverTarget('row', dataset), relatedTarget: null }))
+  harness.rerender()
+  const remaining = findAll(harness.tree, (element) => element.props?.className === 'dshss-hoverCard')
+
+  assertEqual(remaining.length, 0, 'hover card cleared')
+})
+
+await check('project hover card shows name, visible count and path', () => {
+  const { harness, t, browserWindow } = scenario()
+  const project = findOne(harness.tree, (element) => isProjectRow(element) && element.props['aria-label'] === 'Alpha project')
+  const dataset = {
+    workspace: project.props['data-workspace'],
+    projectLabel: project.props['data-project-label'],
+    projectPath: project.props['data-project-path'],
+    projectCount: project.props['data-project-count'],
+  }
+  assertEqual(dataset.projectLabel, 'Alpha project', 'project row exposes the hover label')
+  assertEqual(String(dataset.projectCount), '1', 'project row exposes the visible count')
+  dispatch(harness, harness.tree, 'onMouseOver', syntheticEvent({ target: hoverTarget('project', dataset) }))
+  browserWindow.__runTimers()
+  harness.rerender()
+  const card = findOne(harness.tree, (element) => element.props?.className === 'dshss-hoverCard')
+  const body = textOf(card)
+  assert(body.includes('Alpha project'), 'project name in hover card')
+  assert(body.includes(t('hover.projectCount', { n: 1 })), 'visible chat count in hover card')
+  assert(body.includes('D:\\alpha'), 'project path in hover card')
 })
 
 // ---------------------------------------------------------------------------

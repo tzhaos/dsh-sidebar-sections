@@ -232,7 +232,7 @@ and re-check the live UI; a changed slot contract may require updating this plug
 
 ## 6. Verification
 
-`scripts/check.mjs` is a zero-dependency suite (51 checks) that runs with plain Node:
+`scripts/check.mjs` is a zero-dependency suite (53 checks) that runs with plain Node:
 
 ```sh
 node scripts/check.mjs
@@ -263,9 +263,12 @@ It validates:
 - per-project sorting: a project's own sort override reorders just that group and persists in
   browser storage, with the Host `insertSessionBefore` write dispatched for real Workspace groups;
 - right-click context menus: conversation rows, project rows, and section headings each open their
-  matching menus and dispatch the same actions; while a context menu is open the root carries
-  `dshss-menuActive`, which cancels the hover surface, and closing it clears the state;
-- project rows expose their hover-preview metadata (label, path, visible chat count);
+  matching menus and dispatch the same actions (archived rows offer Unarchive without Pin); while a
+  context menu is open the root carries `dshss-menuActive`, which cancels the hover surface;
+- hover previews: the conversation card renders its title/project/time and clears on leave; the
+  project card renders name/visible-count/path from the row's data attributes;
+- drag manual ordering also covers an upper-half (insert-before) drop and refuses blank draft rows;
+- static guard: menu-open styles never paint a hover background;
 - rendered rows/buttons carry no native `title` tooltips;
 - rows expose their owning project for the hover preview card;
 - interaction dispatch: pin/unpin, archive (including the stop-and-archive refusal path),

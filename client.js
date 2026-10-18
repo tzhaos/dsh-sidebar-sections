@@ -2470,6 +2470,7 @@ window.__ModuleLoader__.load({
             { id: 'archive', label: node.archived ? t('menu.unarchiveSession') : t('menu.archiveSession'), icon: node.archived ? h(IconUnarchiveOutlineRegular, { size: 14 }) : h(IconArchiveOutlineRegular, { size: 14 }) },
             { id: 'copy-id', label: t('menu.sessionId'), icon: h(IconCopyOutlineRegular, { size: 14 }), separatorBefore: true },
           )
+          if (node.archived) items.shift()
           onSelect = (id) => {
             if (id === 'pin') { togglePin(node); return }
             if (id === 'archive') { archiveNode(node); return }

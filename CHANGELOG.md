@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] - 2026-10-18
+
+Test-suite cleanup and a small context-menu fix.
+
+### Tests
+
+- Removed two duplicate checks (four-heading count and the standalone add-workspace flow) and
+  merged the hover metadata checks into the hover-card tests, so every test has one owner.
+- Added coverage for: conversation hover card content + clearing, project hover card content,
+  archived-row right-click (Unarchive, no Pin), insert-before drag drops, blank-row drag guard,
+  context-menu project rename dispatch, and a static guard that menu-open styles never paint a
+  hover background.
+- 53 checks total.
+
+### Fixed
+
+- The archived-row right-click menu no longer offers Pin (matching the shipped ⋯ row menu).
+
 ## [1.7.0] - 2026-10-18
 
 Hover polish and project previews.
