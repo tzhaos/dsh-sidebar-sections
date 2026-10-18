@@ -9,7 +9,7 @@ workspace that can contain several independent plugin repositories; it is not
 where this plugin's CI, editor settings, or contribution rules live.
 
 - The plugin is a self-contained DSH bundle: `package.json`, `cordis.patch.yml`,
-  `index.js`, `client.js`, `icon.svg`, `locale/`, `README.md`, `README.zh.md`,
+  `index.js`, `client.js`, `icon.svg`, `locale/`, `README.md`, `README.en.md`,
   `CHANGELOG.md`, `LICENSE`, `scripts/check.mjs`, and `docs/`.
 - Repository configuration also lives here: `.github/workflows/check.yml`,
   `.editorconfig`, `.gitattributes`, `.gitignore`, and this file.
@@ -45,7 +45,7 @@ request.
 
 ## Documentation
 
-- Keep `README.md` (English) and `README.zh.md` (Simplified Chinese) in sync.
+- Keep `README.md` (Simplified Chinese, primary) and `README.en.md` (English) in sync.
 - Record every user-visible change in `CHANGELOG.md` under the next version,
   following [Keep a Changelog](https://keepachangelog.com/).
 
