@@ -1,3 +1,14 @@
+## [2.4.2] - 2026-10-19
+
+### Changed
+
+- Hide child Sessions tracked by `dsh-quick-fork` from the sidebar, so temporary side chats do not
+  appear as ordinary conversations while their tab is open.
+
+### Verified
+
+- `node scripts/check.mjs`: 68 checks green.
+
 # Changelog
 
 All notable changes to this project are documented in this file.

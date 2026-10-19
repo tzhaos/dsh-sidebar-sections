@@ -462,8 +462,19 @@ window.__ModuleLoader__.load({
      */
     function isVisibleSummary(summary, currentId) {
       if (summary.origin === 'subagent') return false
+      if (isTemporarySideSession(summary.id)) return false
       if (summary.blank === true && summary.id !== currentId) return false
       return true
+    }
+
+    /** Hide side-chat children tracked by dsh-quick-fork from this browser. */
+    function isTemporarySideSession(id) {
+      try {
+        const tracked = JSON.parse(localStorage.getItem('dsh.quickFork.children') ?? '[]')
+        return Array.isArray(tracked) && tracked.includes(id)
+      } catch {
+        return false
+      }
     }
 
     /**
